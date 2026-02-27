@@ -16,7 +16,7 @@ class AudioConfig(BaseSettings):
 
 
 class STTConfig(BaseSettings):
-    model_size: str = "tiny"
+    model_size: str = "medium"
     model_path: Optional[str] = None
     language: str = "zh"
     device: str = "auto"
