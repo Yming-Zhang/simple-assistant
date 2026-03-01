@@ -36,6 +36,20 @@ class VoiceDetector:
         try:
             self.callback = callback
             
+            # 检查是否为默认唤醒词
+            default_keywords = [
+                "ok google", "bumblebee", "americano", "grasshopper", 
+                "terminator", "grapefruit", "hey google", "pico clock", 
+                "hey siri", "computer", "jarvis", "picovoice", 
+                "alexa", "hey barista", "porcupine", "blueberry"
+            ]
+            
+            if self.keyword.lower() not in default_keywords:
+                print(f"警告: 唤醒词 '{self.keyword}' 不是默认支持的唤醒词")
+                print(f"默认支持的唤醒词: {', '.join(default_keywords)}")
+                print("请使用默认唤醒词，或在 Picovoice 控制台创建自定义唤醒词模型")
+                return
+            
             self.porcupine = pvporcupine.create(
                 access_key=self.access_key,
                 keywords=[self.keyword]
