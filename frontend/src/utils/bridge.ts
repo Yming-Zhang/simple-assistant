@@ -1,5 +1,5 @@
 import { useChatStore } from '@/stores/chat'
-import type { AgentEvent } from '@/types'
+import { AgentEventType } from '@/types'
 
 interface PyWebViewWindow extends Window {
   pywebview?: {
@@ -48,7 +48,7 @@ export function registerCallbacks() {
   ;(window as any).onThinking = (reasoning: string) => {
     console.log('onThinking:', reasoning)
     chatStore.addThinkingEvent({
-      type: 'thinking',
+      type: AgentEventType.THINKING,
       data: { reasoning },
       timestamp: Date.now()
     })
@@ -57,7 +57,7 @@ export function registerCallbacks() {
   ;(window as any).onToolStart = (toolCall: any) => {
     console.log('onToolStart:', toolCall)
     chatStore.addThinkingEvent({
-      type: 'tool_start',
+      type: AgentEventType.TOOL_START,
       data: toolCall,
       timestamp: Date.now()
     })
@@ -66,7 +66,7 @@ export function registerCallbacks() {
   ;(window as any).onToolResult = (result: string) => {
     console.log('onToolResult:', result)
     chatStore.addThinkingEvent({
-      type: 'tool_result',
+      type: AgentEventType.TOOL_RESULT,
       data: { result },
       timestamp: Date.now()
     })
@@ -80,7 +80,7 @@ export function registerCallbacks() {
   ;(window as any).onAgentError = (error: string) => {
     console.error('onAgentError:', error)
     chatStore.addThinkingEvent({
-      type: 'error',
+      type: AgentEventType.ERROR,
       data: { error },
       timestamp: Date.now()
     })
@@ -97,6 +97,14 @@ export function registerCallbacks() {
     console.log('onAgentComplete')
     chatStore.setLoading(false)
     chatStore.attachThinkingChainToLastMessage()
+  }
+
+  ;(window as any).onUserMessage = (text: string) => {
+    console.log('onUserMessage:', text)
+    chatStore.addMessage({
+      role: 'user',
+      content: text
+    })
   }
 
   console.log('Bridge callbacks registered')

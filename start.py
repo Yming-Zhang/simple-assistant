@@ -1,87 +1,68 @@
 #!/usr/bin/env python3
 """
-启动脚本
-用于启动电脑助手
+Simple Assistant 入口文件
+整合：Assistant 主控制器 + PyWebView UI
 """
 
-import sys
-import os
-from pathlib import Path
+import logging
+import threading
+from assistant import Assistant
+from ui.bridge import BridgeAPI
+from ui.window import create_window
+import webview
 
-# 添加项目根目录到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent))
-
-from assistant import main
-
-
-def check_venv():
-    """
-    检查是否在虚拟环境中运行
-    """
-    if not hasattr(sys, 'base_prefix') or sys.base_prefix == sys.prefix:
-        print("警告: 未在虚拟环境中运行，可能会遇到依赖问题")
-        print("建议: 先执行 source venv/bin/activate")
-        print("按 Enter 继续，或按 Ctrl+C 退出")
-        input()
-
-
-def check_dependencies():
-    """
-    检查关键依赖是否安装
-    """
-    try:
-        import sounddevice
-        import faster_whisper
-        import edge_tts
-        import pynput
-        import mss
-        import pync
-        print("✅ 所有关键依赖已安装")
-    except ImportError as e:
-        print(f"❌ 缺少依赖: {e}")
-        print("请执行: pip install -e .")
-        sys.exit(1)
-
-
-def print_welcome():
-    """
-    打印欢迎信息
-    """
-    print("=" * 60)
-    print("🎤 电脑助手启动脚本")
-    print("=" * 60)
-    print("\n功能介绍:")
-    print("- 语音唤醒: 说 'hey computer'")
-    print("- 按键唤醒: 按 Cmd+Shift+Space")
-    print("- 支持的命令:")
-    print("  • 截屏/截图/抓图")
-    print("  • 摄像头/拍照")
-    print("  • 打开 Safari/Chrome/Terminal/Finder")
-    print("  • 通知/提醒/提示")
-    print("  • 几点/时间/现在几点")
-    print("  • 你好/hello/hi")
-    print("\n按 Ctrl+C 退出")
-    print("=" * 60)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 def main():
-    """
-    主函数
-    """
+    print("=" * 60)
+    print("Simple Assistant - 全能 macOS AI 桌面助手")
+    print("=" * 60)
+    print()
+    
     try:
-        print_welcome()
-        check_venv()
-        check_dependencies()
+        # 1. 初始化 Assistant
+        assistant = Assistant()
         
-        print("\n启动电脑助手...")
-        from assistant import main as assistant_main
-        assistant_main()
+        # 2. 初始化 Bridge API，传入 assistant
+        bridge = BridgeAPI(assistant=assistant)
         
-    except KeyboardInterrupt:
-        print("\n正在退出...")
+        # 3. 创建窗口
+        window = create_window(bridge_api=bridge)
+        bridge.set_window(window)
+        
+        # 4. 在单独的线程运行唤醒系统，避免阻塞 PyWebView
+        def run_wake_system():
+            try:
+                assistant.wake_system.start(
+                    callback=assistant.handle_wakeup,
+                    enable_voice=True,
+                    enable_key=True
+                )
+            except Exception as e:
+                logger.error(f"唤醒系统启动失败: {e}")
+        
+        wake_thread = threading.Thread(target=run_wake_system, daemon=True)
+        wake_thread.start()
+        
+        print("✅ 应用启动成功！")
+        print("📢 可以使用：")
+        print("   - 语音：'Hey Computer' 唤醒")
+        print("   - 快捷键：Cmd+Shift+Space 唤醒")
+        print("   - UI：在界面直接输入文字或录音")
+        print()
+        
+        # 5. 启动 PyWebView
+        webview.start()
+        
     except Exception as e:
-        print(f"\n启动失败: {e}")
-        sys.exit(1)
+        logger.error(f"启动失败: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

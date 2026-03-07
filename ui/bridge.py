@@ -1,3 +1,5 @@
+import time
+import threading
 import asyncio
 from typing import Optional, List, Any, Dict
 
@@ -5,24 +7,17 @@ from typing import Optional, List, Any, Dict
 class BridgeAPI:
     """
     Python ↔ JavaScript 桥接 API
+    整合 Assistant 主控制器
     """
     
     def __init__(self, assistant=None):
         self.assistant = assistant
         self.window = None
-        self._current_task = None
+        self._is_recording = False
+        self._audio_file = None
     
     def set_window(self, window):
         self.window = window
-    
-    def _safe_create_task(self, coro):
-        """安全地创建异步任务，处理没有运行事件循环的情况"""
-        try:
-            loop = asyncio.get_running_loop()
-            return loop.create_task(coro)
-        except RuntimeError:
-            print("没有运行的事件循环，跳过异步任务")
-            return None
     
     def _evaluate_js(self, func_name: str, *args):
         """
@@ -35,134 +30,215 @@ class BridgeAPI:
             except Exception as e:
                 print(f"JS 调用失败: {e}")
     
-    def send_message(self, text: str, images: Optional[List[str]] = None):
+    def start_recording(self):
         """
-        发送消息（支持文字+图片）
-        
-        Args:
-            text: 文字内容
-            images: Base64 图片列表，每个元素格式为:
-                    "data:image/png;base64,iVBORw0KGgo..."
+        开始录音（前端调用）
         """
-        print(f"收到消息: text={text}, images_count={len(images) if images else 0}")
-        
-        messages = self._build_messages(text, images)
-        
-        if self.assistant:
-            self._evaluate_js("onAgentStart")
-            self._current_task = self._safe_create_task(
-                self._process_with_agent(messages)
-            )
-        else:
-            self._simulate_response(text, images)
+        print("开始录音")
+        self._is_recording = True
+        self._evaluate_js("onAgentStart")
     
-    def _build_messages(self, text: str, images: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    def stop_recording(self):
         """
-        组装 OpenAI 兼容的多模态消息格式
+        停止录音并处理（前端调用）
+        完整流程：录音 → STT → 发送给 Agent → 推送到前端
         """
-        content = []
+        print("停止录音")
+        self._is_recording = False
         
-        if text:
-            content.append({"type": "text", "text": text})
+        def process():
+            try:
+                if self.assistant:
+                    # 有真实 Assistant 的情况
+                    self._process_with_assistant()
+                else:
+                    # 没有 Assistant，模拟
+                    self._simulate_process()
+            except Exception as e:
+                print(f"处理失败: {e}")
+                self._evaluate_js("onAgentError", str(e))
+                self._evaluate_js("onAgentComplete")
         
-        if images:
-            for img_base64 in images:
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": img_base64}
-                })
-        
-        return [{"role": "user", "content": content}]
+        thread = threading.Thread(target=process)
+        thread.daemon = True
+        thread.start()
     
-    async def _process_with_agent(self, messages: List[Dict[str, Any]]):
+    def _process_with_assistant(self):
         """
-        使用真实 Agent 处理消息
+        使用真实的 Assistant 处理
         """
         try:
-            user_text = ""
-            for msg in messages:
-                if isinstance(msg.get("content"), list):
-                    for item in msg["content"]:
-                        if item.get("type") == "text":
-                            user_text = item.get("text", "")
-                            break
-                else:
-                    user_text = msg.get("content", "")
+            from audio.microphone import record_audio
+            from audio.stt import transcribe
             
-            self._evaluate_js("onThinking", "正在分析您的请求...")
-            await asyncio.sleep(0.5)
+            # 1. 录音（简化版，录 5 秒）
+            self._evaluate_js("onThinking", "正在录音...")
+            audio_file = record_audio(seconds=5)
             
-            has_tools = any(keyword in user_text.lower() for keyword in 
-                           ["打开", "搜索", "终端", "浏览器", "chrome", "safari"])
+            if not audio_file:
+                self._evaluate_js("onAgentError", "录音失败")
+                self._evaluate_js("onAgentComplete")
+                return
             
-            if has_tools:
-                self._evaluate_js("onToolStart", {"name": "browser.open", "args": {"url": "https://example.com"}})
-                await asyncio.sleep(1)
-                self._evaluate_js("onToolResult", "浏览器已打开")
-                
-                self._evaluate_js("onToolStart", {"name": "terminal.execute", "args": {"command": "echo 'hello'"}})
-                await asyncio.sleep(0.8)
-                self._evaluate_js("onToolResult", "命令执行完成: hello")
+            # 2. STT 转文字
+            self._evaluate_js("onThinking", "正在识别语音...")
+            text = transcribe(audio_file)
             
-            self._evaluate_js("onThinking", "正在生成回复...")
-            await asyncio.sleep(0.5)
+            if not text:
+                self._evaluate_js("onAgentError", "语音识别失败")
+                self._evaluate_js("onAgentComplete")
+                return
             
-            response = f"好的，我已收到您的消息：{user_text}"
-            if len(messages[0].get("content", [])) > 1:
-                response += f"\n\n同时收到了 {len(messages[0]['content']) - 1} 张图片。"
+            print(f"识别到: {text}")
             
-            for i, char in enumerate(response):
-                self._evaluate_js("onAgentReply", response[:i+1])
-                await asyncio.sleep(0.03)
+            # 3. 添加用户消息到前端
+            self._evaluate_js("onUserMessage", text)
+            
+            # 4. 用 LLM 直接对话
+            self._evaluate_js("onThinking", "正在思考...")
+            result = self.assistant._call_llm_directly(text)
+            
+            if not result:
+                content = "抱歉，我无法处理这个请求"
+                reasoning = None
+            else:
+                content = result.get("content", "")
+                reasoning = result.get("reasoning", None)
+            
+            # 5. 显示思考过程
+            if reasoning:
+                self._evaluate_js("onThinking", reasoning)
+                time.sleep(0.5)
+            
+            # 6. 流式输出到前端
+            for i in range(len(content)):
+                self._evaluate_js("onAgentReply", content[:i+1])
+                time.sleep(0.03)
             
             self._evaluate_js("onAgentComplete")
             
         except Exception as e:
+            print(f"处理失败: {e}")
             self._evaluate_js("onAgentError", str(e))
             self._evaluate_js("onAgentComplete")
     
+    def send_message(self, text: str, images: Optional[List[str]] = None):
+        """
+        发送文字消息（用户直接输入文字时调用）
+        """
+        print(f"收到文字消息: text={text}, images_count={len(images) if images else 0}")
+        
+        def process():
+            try:
+                # 添加用户消息到前端
+                self._evaluate_js("onUserMessage", text)
+                
+                if self.assistant:
+                    # 用 LLM 直接对话
+                    self._evaluate_js("onAgentStart")
+                    self._evaluate_js("onThinking", "正在思考...")
+                    result = self.assistant._call_llm_directly(text)
+                    
+                    if not result:
+                        content = "抱歉，我无法处理这个请求"
+                        reasoning = None
+                    else:
+                        content = result.get("content", "")
+                        reasoning = result.get("reasoning", None)
+                    
+                    if images:
+                        content += f"\n\n（收到了 {len(images)} 张图片）"
+                    
+                    # 显示思考过程
+                    if reasoning:
+                        self._evaluate_js("onThinking", reasoning)
+                        time.sleep(0.5)
+                    
+                    # 流式输出
+                    for i in range(len(content)):
+                        self._evaluate_js("onAgentReply", content[:i+1])
+                        time.sleep(0.03)
+                    
+                    self._evaluate_js("onAgentComplete")
+                else:
+                    # 模拟响应
+                    self._simulate_response(text, images)
+                    
+            except Exception as e:
+                print(f"处理失败: {e}")
+                self._evaluate_js("onAgentError", str(e))
+                self._evaluate_js("onAgentComplete")
+        
+        thread = threading.Thread(target=process)
+        thread.daemon = True
+        thread.start()
+    
+    def _simulate_process(self):
+        """
+        模拟处理录音流程（没有 assistant 时）
+        """
+        self._evaluate_js("onThinking", "正在录音...")
+        time.sleep(1)
+        
+        self._evaluate_js("onThinking", "正在识别语音...")
+        time.sleep(1)
+        
+        text = "你是谁"
+        self._evaluate_js("onUserMessage", text)
+        self._simulate_response(text, None)
+    
     def _simulate_response(self, text: str, images: Optional[List[str]] = None):
         """
-        模拟响应（当没有 assistant 时）
+        模拟响应（没有 assistant 时）
         """
-        print(f"模拟响应: {text}")
+        self._evaluate_js("onAgentStart")
+        time.sleep(0.3)
         
-        async def simulate():
-            self._evaluate_js("onAgentStart")
-            await asyncio.sleep(0.3)
-            
-            self._evaluate_js("onThinking", "正在思考...")
-            await asyncio.sleep(0.5)
-            
-            self._evaluate_js("onToolStart", {"name": "example_tool", "args": {"param": "test"}})
-            await asyncio.sleep(0.8)
-            self._evaluate_js("onToolResult", "工具执行成功")
-            
-            response = "这是一个模拟的回复。"
-            if text:
-                response += f"\n\n您的消息: {text}"
-            if images:
-                response += f"\n\n图片数量: {len(images)}"
-            
-            for i, char in enumerate(response):
-                self._evaluate_js("onAgentReply", response[:i+1])
-                await asyncio.sleep(0.03)
-            
-            self._evaluate_js("onAgentComplete")
+        self._evaluate_js("onThinking", "正在思考...")
+        time.sleep(0.5)
         
-        self._safe_create_task(simulate())
-    
-    def start_recording(self):
-        print("开始录音")
-    
-    def stop_recording(self):
-        print("停止录音")
+        has_tools = any(keyword in text.lower() for keyword in 
+                       ["打开", "搜索", "终端", "浏览器", "chrome", "safari"])
+        
+        if has_tools:
+            self._evaluate_js("onToolStart", {"name": "browser.open", "args": {"url": "https://example.com"}})
+            time.sleep(1)
+            self._evaluate_js("onToolResult", "浏览器已打开")
+            
+            self._evaluate_js("onToolStart", {"name": "terminal.execute", "args": {"command": "echo 'hello'"}})
+            time.sleep(0.8)
+            self._evaluate_js("onToolResult", "命令执行完成: hello")
+        
+        self._evaluate_js("onThinking", "正在生成回复...")
+        time.sleep(0.5)
+        
+        response = "这是一个模拟的回复。"
+        if text:
+            response += f"\n\n您的消息: {text}"
+        if images:
+            response += f"\n\n图片数量: {len(images)}"
+        
+        for i in range(len(response)):
+            self._evaluate_js("onAgentReply", response[:i+1])
+            time.sleep(0.03)
+        
+        self._evaluate_js("onAgentComplete")
     
     def get_history(self):
-        return []
+        return [
+            {"id": "1", "date": "2026-03-07", "title": "今天的天气怎么样"},
+            {"id": "2", "date": "2026-03-07", "title": "打开 Chrome 浏览器"},
+            {"id": "3", "date": "2026-03-06", "title": "设置提醒"},
+            {"id": "4", "date": "2026-03-06", "title": "创建文档"},
+            {"id": "5", "date": "2026-03-05", "title": "音乐播放"}
+        ]
     
     def get_settings(self):
-        return {}
+        return {
+            "showThinkingChain": True,
+            "model": "qwen3.5",
+            "temperature": 0.7
+        }
     
     def update_settings(self, settings: dict):
         print(f"更新设置: {settings}")

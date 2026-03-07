@@ -3,9 +3,9 @@
     <el-tabs v-model="activeTab" type="border-card" class="sidebar-tabs">
       <el-tab-pane label="历史" name="history">
         <div class="history-list">
-          <div v-for="i in 5" :key="i" class="history-item">
-            <div class="history-date">2026-03-07</div>
-            <div class="history-title">对话 {{ i }}</div>
+          <div v-for="item in historyList" :key="item.id" class="history-item">
+            <div class="history-date">{{ item.date }}</div>
+            <div class="history-title">{{ item.title }}</div>
           </div>
         </div>
       </el-tab-pane>
@@ -36,11 +36,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settings'
 
 const activeTab = ref('history')
 const settingsStore = useSettingsStore()
+const historyList = ref<any[]>([])
+
+onMounted(() => {
+  loadHistory()
+})
+
+function loadHistory() {
+  try {
+    const pywebview = (window as any).pywebview
+    if (pywebview?.api?.get_history) {
+      historyList.value = pywebview.api.get_history()
+    } else {
+      historyList.value = [
+        {"id": "1", "date": "2026-03-07", "title": "今天的天气怎么样"},
+        {"id": "2", "date": "2026-03-07", "title": "打开 Chrome 浏览器"},
+        {"id": "3", "date": "2026-03-06", "title": "设置提醒"},
+        {"id": "4", "date": "2026-03-06", "title": "创建文档"},
+        {"id": "5", "date": "2026-03-05", "title": "音乐播放"}
+      ]
+    }
+  } catch (e) {
+    console.error('加载历史记录失败:', e)
+  }
+}
 </script>
 
 <style scoped>

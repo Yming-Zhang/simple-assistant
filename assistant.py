@@ -124,7 +124,7 @@ class Assistant:
             self.registry.register(skill)
             logger.info(f"注册内置 Skill: {skill.name}")
     
-    def _call_llm_directly(self, text: str) -> Optional[str]:
+    def _call_llm_directly(self, text: str) -> Optional[dict]:
         """
         直接调用 LLM 进行纯对话
         
@@ -132,7 +132,7 @@ class Assistant:
             text: 用户输入
             
         Returns:
-            LLM 响应
+            包含 content 和 reasoning 的字典
         """
         if not self.llm_provider:
             return None
@@ -151,7 +151,10 @@ class Assistant:
             if response.reasoning:
                 logger.info(f"LLM 推理: {response.reasoning}")
             
-            return response.content
+            return {
+                "content": response.content,
+                "reasoning": response.reasoning
+            }
             
         except Exception as e:
             logger.error(f"LLM 调用失败: {e}")
@@ -215,8 +218,9 @@ class Assistant:
                 logger.warning(f"未匹配到任何 Skill: {text}")
                 
                 # 尝试直接调用 LLM 进行对话
-                llm_response = self._call_llm_directly(text)
-                if llm_response:
+                llm_result = self._call_llm_directly(text)
+                if llm_result:
+                    llm_response = llm_result.get("content", "")
                     logger.info(f"LLM 响应: {llm_response}")
                     
                     # 添加助手回复到记忆
