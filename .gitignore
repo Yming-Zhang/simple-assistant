@@ -35,3 +35,16 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# Node.js / Vue 相关
+node_modules/
+frontend/node_modules/
+frontend/dist/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.npm
+.yarn-integrity
+.eslintcache
+*.log
+
