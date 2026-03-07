@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
 电脑助手主程序
-整合所有组件：唤醒系统、音频处理、STT、TTS、Skill 系统
+整合所有组件：唤醒系统、音频处理、STT、TTS、Skill 系统、LLM 系统
 """
 
 import time
 import logging
+import asyncio
 from typing import Optional, Dict, Any
 from pathlib import Path
 
@@ -23,7 +24,12 @@ from audio.stt import transcribe
 from audio.tts import speak
 from wake.wake_system import get_wake_system
 from skills.registry import get_registry
-from matcher.keyword import KeywordMatcher
+from matcher.llm import LLMMatcher
+from skills.loader import SkillLoader
+from llm.base import LLMProvider
+from llm.response import ChatResponse
+from llm.factory import LLMProviderFactory
+from config import config
 
 # 导入内置 Skills
 from skills.builtin.screen import ScreenSkill
@@ -41,22 +47,46 @@ class Assistant:
     def __init__(self):
         logger.info("初始化电脑助手...")
         
+        # 创建全局事件循环
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        
         # 初始化 Skill 注册中心
         self.registry = get_registry()
-        self._register_skills()
         
-        # 初始化关键词匹配器
-        self.matcher = KeywordMatcher(self.registry)
+        # 加载 Skills（从目录动态加载）
+        self.skill_loader = SkillLoader(self.registry)
+        
+        # 注册内置 Skills
+        self._register_builtin_skills()
+        
+        # 从 knowledge 目录加载 Knowledge Skills
+        knowledge_dir = Path(__file__).parent / "skills" / "knowledge"
+        if knowledge_dir.exists():
+            loaded_count = self.skill_loader.load_from_directory(str(knowledge_dir))
+            logger.info(f"从 knowledge 目录加载了 {loaded_count} 个 Skills")
+        
+        # 初始化 LLM 匹配器（优先），传入全局事件循环
+        self.matcher = LLMMatcher(self.registry, self.loop)
+        
+        # 初始化独立的 LLM Provider 用于纯对话
+        try:
+            self.llm_provider: Optional[LLMProvider] = LLMProviderFactory.create(
+                config.llm.provider,
+                config.llm.get_provider_config()
+            )
+            logger.info("LLM Provider 初始化成功")
+        except Exception as e:
+            logger.warning(f"LLM Provider 初始化失败: {e}")
+            self.llm_provider = None
         
         # 初始化唤醒系统
         self.wake_system = get_wake_system()
         
         logger.info("电脑助手初始化完成！")
     
-    def _register_skills(self):
-        """
-        注册所有 Skills
-        """
+    def _register_builtin_skills(self):
+        """注册内置 Skills"""
         skills = [
             ScreenSkill(),
             CameraSkill(),
@@ -66,7 +96,42 @@ class Assistant:
         
         for skill in skills:
             self.registry.register(skill)
-            logger.info(f"注册 Skill: {skill.name}")
+            logger.info(f"注册内置 Skill: {skill.name}")
+    
+    def _call_llm_directly(self, text: str) -> Optional[str]:
+        """
+        直接调用 LLM 进行纯对话
+        
+        Args:
+            text: 用户输入
+            
+        Returns:
+            LLM 响应
+        """
+        if not self.llm_provider:
+            return None
+        
+        try:
+            logger.info("直接调用 LLM 进行对话...")
+            messages = [
+                {"role": "system", "content": "你是一个友好的电脑助手，用简洁的中文回答用户的问题。"},
+                {"role": "user", "content": text}
+            ]
+            
+            response: ChatResponse = self.loop.run_until_complete(
+                self.llm_provider.chat(messages, include_reasoning=True)
+            )
+            
+            if response.reasoning:
+                logger.info(f"LLM 推理: {response.reasoning}")
+            
+            return response.content
+            
+        except Exception as e:
+            logger.error(f"LLM 调用失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
     
     def handle_wakeup(self):
         """
@@ -96,20 +161,34 @@ class Assistant:
             
             logger.info(f"识别到: {text}")
             
-            # 4. 关键词匹配
-            logger.info("正在匹配关键词...")
+            # 4. LLM 匹配
+            logger.info("正在使用 LLM 匹配...")
             skill, params = self.matcher.match(text)
+            
+            # 获取 reasoning 并打印
+            reasoning = self.matcher.get_last_reasoning()
+            if reasoning:
+                logger.info(f"匹配推理: {reasoning}")
             
             if skill:
                 logger.info(f"匹配到 Skill: {skill.name}")
+                
                 # 5. 执行 Skill
                 result = skill.execute(params)
                 logger.info(f"执行结果: {result}")
+                
                 # 6. TTS 播放结果
                 self._speak(result)
             else:
                 logger.warning(f"未匹配到任何 Skill: {text}")
-                self._speak("抱歉，我还不支持这个功能")
+                
+                # 尝试直接调用 LLM 进行对话
+                llm_response = self._call_llm_directly(text)
+                if llm_response:
+                    logger.info(f"LLM 响应: {llm_response}")
+                    self._speak(llm_response)
+                else:
+                    self._speak("抱歉，我还不支持这个功能")
                 
         except Exception as e:
             logger.error(f"处理唤醒事件时出错: {str(e)}")
