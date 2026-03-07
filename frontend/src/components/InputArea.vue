@@ -115,17 +115,6 @@ function handleSend() {
   const text = inputText.value.trim()
   if (!text && selectedImages.value.length === 0) return
   
-  chatStore.addMessage({
-    role: 'user',
-    content: text,
-    images: [...selectedImages.value]
-  })
-  
-  chatStore.addMessage({
-    role: 'assistant',
-    content: ''
-  })
-  
   api.sendMessage(text, selectedImages.value.length > 0 ? selectedImages.value : undefined)
   
   inputText.value = ''

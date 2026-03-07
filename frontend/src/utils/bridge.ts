@@ -47,11 +47,7 @@ export function registerCallbacks() {
 
   ;(window as any).onThinking = (reasoning: string) => {
     console.log('onThinking:', reasoning)
-    chatStore.addThinkingEvent({
-      type: AgentEventType.THINKING,
-      data: { reasoning },
-      timestamp: Date.now()
-    })
+    chatStore.updateLastThinking(reasoning)
   }
 
   ;(window as any).onToolStart = (toolCall: any) => {
@@ -74,6 +70,9 @@ export function registerCallbacks() {
 
   ;(window as any).onAgentReply = (content: string) => {
     console.log('onAgentReply:', content)
+    if (chatStore.messages.length === 0 || chatStore.messages[chatStore.messages.length - 1].role !== 'assistant') {
+      chatStore.addMessage({ role: 'assistant', content: '' })
+    }
     chatStore.updateLastMessage(content)
   }
 

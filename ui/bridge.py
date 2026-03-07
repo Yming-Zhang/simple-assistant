@@ -15,6 +15,11 @@ class BridgeAPI:
         self.window = None
         self._is_recording = False
         self._audio_file = None
+        
+        # 创建异步事件循环用于流式调用
+        self._stream_loop = asyncio.new_event_loop()
+        self._stream_thread = None
+        self._stream_running = False
     
     def set_window(self, window):
         self.window = window
@@ -65,7 +70,7 @@ class BridgeAPI:
     
     def _process_with_assistant(self):
         """
-        使用真实的 Assistant 处理
+        使用真实的 Assistant 处理录音
         """
         try:
             from audio.microphone import record_audio
@@ -94,28 +99,8 @@ class BridgeAPI:
             # 3. 添加用户消息到前端
             self._evaluate_js("onUserMessage", text)
             
-            # 4. 用 LLM 直接对话
-            self._evaluate_js("onThinking", "正在思考...")
-            result = self.assistant._call_llm_directly(text)
-            
-            if not result:
-                content = "抱歉，我无法处理这个请求"
-                reasoning = None
-            else:
-                content = result.get("content", "")
-                reasoning = result.get("reasoning", None)
-            
-            # 5. 显示思考过程
-            if reasoning:
-                self._evaluate_js("onThinking", reasoning)
-                time.sleep(0.5)
-            
-            # 6. 流式输出到前端
-            for i in range(len(content)):
-                self._evaluate_js("onAgentReply", content[:i+1])
-                time.sleep(0.03)
-            
-            self._evaluate_js("onAgentComplete")
+            # 4. 流式调用 LLM
+            self._stream_llm_with_assistant(text)
             
         except Exception as e:
             print(f"处理失败: {e}")
@@ -134,32 +119,8 @@ class BridgeAPI:
                 self._evaluate_js("onUserMessage", text)
                 
                 if self.assistant:
-                    # 用 LLM 直接对话
-                    self._evaluate_js("onAgentStart")
-                    self._evaluate_js("onThinking", "正在思考...")
-                    result = self.assistant._call_llm_directly(text)
-                    
-                    if not result:
-                        content = "抱歉，我无法处理这个请求"
-                        reasoning = None
-                    else:
-                        content = result.get("content", "")
-                        reasoning = result.get("reasoning", None)
-                    
-                    if images:
-                        content += f"\n\n（收到了 {len(images)} 张图片）"
-                    
-                    # 显示思考过程
-                    if reasoning:
-                        self._evaluate_js("onThinking", reasoning)
-                        time.sleep(0.5)
-                    
-                    # 流式输出
-                    for i in range(len(content)):
-                        self._evaluate_js("onAgentReply", content[:i+1])
-                        time.sleep(0.03)
-                    
-                    self._evaluate_js("onAgentComplete")
+                    # 流式调用 LLM
+                    self._stream_llm_with_assistant(text, images)
                 else:
                     # 模拟响应
                     self._simulate_response(text, images)
@@ -172,6 +133,54 @@ class BridgeAPI:
         thread = threading.Thread(target=process)
         thread.daemon = True
         thread.start()
+    
+    def _stream_llm_with_assistant(self, text: str, images: Optional[List[str]] = None):
+        """
+        使用真实的 Assistant 流式调用 LLM
+        """
+        self._evaluate_js("onAgentStart")
+        self._evaluate_js("onThinking", "正在思考...")
+        
+        # 预处理文本，避免闭包问题
+        processed_text = text
+        if images:
+            processed_text += f"\n\n（收到了 {len(images)} 张图片）"
+        
+        async def on_chunk(chunk_type, content):
+            """
+            流式回调：接收思考过程和内容，实时推送到前端
+            """
+            if chunk_type == "reasoning":
+                self._evaluate_js("onThinking", content)
+            elif chunk_type == "content":
+                self._evaluate_js("onAgentReply", content)
+        
+        async def stream_task():
+            """
+            异步流式调用任务
+            """
+            try:
+                await self.assistant._stream_llm_directly(processed_text, on_chunk)
+                self._evaluate_js("onAgentComplete")
+            except Exception as e:
+                print(f"流式调用失败: {e}")
+                import traceback
+                traceback.print_exc()
+                self._evaluate_js("onAgentError", str(e))
+                self._evaluate_js("onAgentComplete")
+        
+        # 在独立线程的事件循环中运行异步任务
+        def run_stream():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(stream_task())
+            finally:
+                loop.close()
+        
+        stream_thread = threading.Thread(target=run_stream)
+        stream_thread.daemon = True
+        stream_thread.start()
     
     def _simulate_process(self):
         """

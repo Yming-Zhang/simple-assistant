@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Message, AgentEvent, ChatState } from '@/types'
+import { AgentEventType } from '@/types'
 
 export const useChatStore = defineStore('chat', {
   state: (): ChatState => ({
@@ -34,6 +35,27 @@ export const useChatStore = defineStore('chat', {
 
     addThinkingEvent(event: AgentEvent) {
       this.currentThinkingChain.push(event)
+    },
+    
+    updateLastThinking(reasoning: string) {
+      if (this.currentThinkingChain.length > 0) {
+        const lastEvent = this.currentThinkingChain[this.currentThinkingChain.length - 1]
+        if (lastEvent.type === AgentEventType.THINKING && lastEvent.data.reasoning) {
+          lastEvent.data.reasoning = reasoning
+        } else {
+          this.addThinkingEvent({
+            type: AgentEventType.THINKING,
+            data: { reasoning },
+            timestamp: Date.now()
+          })
+        }
+      } else {
+        this.addThinkingEvent({
+          type: AgentEventType.THINKING,
+          data: { reasoning },
+          timestamp: Date.now()
+        })
+      }
     },
 
     clearThinkingChain() {

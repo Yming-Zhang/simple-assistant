@@ -126,7 +126,7 @@ class Assistant:
     
     def _call_llm_directly(self, text: str) -> Optional[dict]:
         """
-        直接调用 LLM 进行纯对话
+        直接调用 LLM 进行纯对话（同步）
         
         Args:
             text: 用户输入
@@ -161,6 +161,47 @@ class Assistant:
             import traceback
             logger.error(traceback.format_exc())
             return None
+    
+    async def _stream_llm_directly(self, text: str, on_chunk):
+        """
+        流式调用 LLM 进行纯对话
+        
+        Args:
+            text: 用户输入
+            on_chunk: 回调函数，接收 (type, content)，type 可以是 'reasoning' 或 'content'
+        """
+        if not self.llm_provider:
+            return
+        
+        try:
+            logger.info("流式调用 LLM 进行对话...")
+            messages = [
+                {"role": "system", "content": "你是一个友好的电脑助手，用简洁的中文回答用户的问题。"},
+                {"role": "user", "content": text}
+            ]
+            
+            full_reasoning = ""
+            full_content = ""
+            
+            async for chunk in self.llm_provider.stream_chat(messages, include_reasoning=True):
+                if chunk.reasoning:
+                    full_reasoning += chunk.reasoning
+                    await on_chunk("reasoning", full_reasoning)
+                
+                if chunk.content:
+                    full_content += chunk.content
+                    await on_chunk("content", full_content)
+                
+                if chunk.is_finished:
+                    break
+            
+            if full_reasoning:
+                logger.info(f"LLM 推理: {full_reasoning}")
+            
+        except Exception as e:
+            logger.error(f"流式 LLM 调用失败: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
     
     def handle_wakeup(self):
         """
