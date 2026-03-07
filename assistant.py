@@ -42,6 +42,10 @@ from skills.builtin.camera import CameraSkill
 from skills.builtin.system_cmd import SystemCmdSkill
 from skills.builtin.notification import NotificationSkill
 from skills.builtin.memory import MemorySearchSkill, MemoryGetSkill
+from skills.builtin.terminal import TerminalSkill
+from skills.builtin.browser import BrowserSkill
+from skills.builtin.app_control import AppControlSkill
+from skills.builtin.feishu import FeishuSkill
 
 
 class Assistant:
@@ -110,6 +114,10 @@ class Assistant:
             NotificationSkill(),
             MemorySearchSkill(self.conversation_manager),
             MemoryGetSkill(self.conversation_manager),
+            TerminalSkill(),
+            BrowserSkill(),
+            AppControlSkill(),
+            FeishuSkill(),
         ]
         
         for skill in skills:
