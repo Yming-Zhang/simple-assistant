@@ -31,11 +31,17 @@ from llm.response import ChatResponse
 from llm.factory import LLMProviderFactory
 from config import config
 
+# 记忆系统
+from memory.store import MemoryStore
+from memory.db import MemoryDB
+from memory.conversation import ConversationManager
+
 # 导入内置 Skills
 from skills.builtin.screen import ScreenSkill
 from skills.builtin.camera import CameraSkill
 from skills.builtin.system_cmd import SystemCmdSkill
 from skills.builtin.notification import NotificationSkill
+from skills.builtin.memory import MemorySearchSkill, MemoryGetSkill
 
 
 class Assistant:
@@ -56,6 +62,16 @@ class Assistant:
         
         # 加载 Skills（从目录动态加载）
         self.skill_loader = SkillLoader(self.registry)
+        
+        # 初始化记忆系统
+        self.memory_store = MemoryStore(config.memory.data_dir)
+        self.memory_db = MemoryDB(str(Path(config.memory.data_dir) / "memory.db"))
+        self.conversation_manager = ConversationManager(
+            self.memory_store,
+            self.memory_db,
+            max_sliding_window=config.memory.max_sliding_window
+        )
+        logger.info("记忆系统初始化成功")
         
         # 注册内置 Skills
         self._register_builtin_skills()
@@ -92,6 +108,8 @@ class Assistant:
             CameraSkill(),
             SystemCmdSkill(),
             NotificationSkill(),
+            MemorySearchSkill(self.conversation_manager),
+            MemoryGetSkill(self.conversation_manager),
         ]
         
         for skill in skills:
@@ -161,6 +179,9 @@ class Assistant:
             
             logger.info(f"识别到: {text}")
             
+            # 添加用户消息到记忆
+            self.conversation_manager.add_message("user", text)
+            
             # 4. LLM 匹配
             logger.info("正在使用 LLM 匹配...")
             skill, params = self.matcher.match(text)
@@ -177,6 +198,9 @@ class Assistant:
                 result = skill.execute(params)
                 logger.info(f"执行结果: {result}")
                 
+                # 添加助手回复到记忆
+                self.conversation_manager.add_message("assistant", result)
+                
                 # 6. TTS 播放结果
                 self._speak(result)
             else:
@@ -186,9 +210,15 @@ class Assistant:
                 llm_response = self._call_llm_directly(text)
                 if llm_response:
                     logger.info(f"LLM 响应: {llm_response}")
+                    
+                    # 添加助手回复到记忆
+                    self.conversation_manager.add_message("assistant", llm_response)
+                    
                     self._speak(llm_response)
                 else:
-                    self._speak("抱歉，我还不支持这个功能")
+                    response = "抱歉，我还不支持这个功能"
+                    self.conversation_manager.add_message("assistant", response)
+                    self._speak(response)
                 
         except Exception as e:
             logger.error(f"处理唤醒事件时出错: {str(e)}")

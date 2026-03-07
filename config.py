@@ -97,12 +97,28 @@ class LLMConfig(BaseSettings):
             raise ValueError(f"不支持的 provider: {self.provider}")
 
 
+class MemoryConfig(BaseSettings):
+    """记忆系统配置"""
+    data_dir: str = "./data/memory"
+    conversations_dir: str = "conversations"
+    long_term_memory_file: str = "MEMORY.md"
+    max_sliding_window: int = 10
+    
+    model_config = SettingsConfigDict(
+        env_prefix="MEMORY_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+
 class Config(BaseSettings):
     audio: AudioConfig = AudioConfig()
     stt: STTConfig = STTConfig()
     tts: TTSConfig = TTSConfig()
     wake: WakeConfig = WakeConfig()
     llm: LLMConfig = LLMConfig()
+    memory: MemoryConfig = MemoryConfig()
 
     model_config = SettingsConfigDict(
         env_file=".env",
