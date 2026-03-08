@@ -8,7 +8,11 @@ class MemorySearchSkill(BaseSkill):
     description = "搜索相关记忆"
     is_knowledge = False
     
-    def __init__(self, conversation_manager):
+    def __init__(self):
+        self.conv = None
+    
+    def set_conversation_manager(self, conversation_manager):
+        """设置对话管理器（延迟初始化）"""
         self.conv = conversation_manager
     
     def execute(self, params: Optional[Dict[str, Any]] = None) -> str:
@@ -19,6 +23,9 @@ class MemorySearchSkill(BaseSkill):
             "days": 3  # 搜索最近几天
         }
         """
+        if not self.conv:
+            return "记忆系统未初始化"
+        
         if not params:
             params = {}
         
@@ -46,7 +53,11 @@ class MemoryGetSkill(BaseSkill):
     description = "读取具体日期的记忆"
     is_knowledge = False
     
-    def __init__(self, conversation_manager):
+    def __init__(self):
+        self.conv = None
+    
+    def set_conversation_manager(self, conversation_manager):
+        """设置对话管理器（延迟初始化）"""
         self.conv = conversation_manager
     
     def execute(self, params: Optional[Dict[str, Any]] = None) -> str:
@@ -57,6 +68,9 @@ class MemoryGetSkill(BaseSkill):
             "type": "day"  # day|long_term
         }
         """
+        if not self.conv:
+            return "记忆系统未初始化"
+        
         if not params:
             params = {}
         

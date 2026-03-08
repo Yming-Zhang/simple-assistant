@@ -264,3 +264,64 @@ class BridgeAPI:
     
     def update_settings(self, settings: dict):
         print(f"更新设置: {settings}")
+    
+    def get_skills(self):
+        """获取所有已加载的技能列表"""
+        if not self.assistant:
+            return []
+        
+        skills = []
+        for skill in self.assistant.registry.get_all():
+            skill_info = {
+                "name": skill.name,
+                "description": skill.description,
+                "keywords": getattr(skill, "keywords", []),
+                "is_knowledge": getattr(skill, "is_knowledge", False),
+                "enabled": True
+            }
+            skills.append(skill_info)
+        
+        return skills
+    
+    def reload_skills(self):
+        """重新加载所有技能"""
+        from pathlib import Path
+        
+        if not self.assistant:
+            return False
+        
+        try:
+            self.assistant.registry.clear()
+            
+            builtin_dir = Path(__file__).parent.parent / "skills" / "builtin"
+            if builtin_dir.exists():
+                self.assistant.skill_loader.load_from_directory(str(builtin_dir))
+                
+                memory_search = self.assistant.registry.get("memory_search")
+                if memory_search and hasattr(memory_search, "set_conversation_manager"):
+                    memory_search.set_conversation_manager(self.assistant.conversation_manager)
+                
+                memory_get = self.assistant.registry.get("memory_get")
+                if memory_get and hasattr(memory_get, "set_conversation_manager"):
+                    memory_get.set_conversation_manager(self.assistant.conversation_manager)
+            
+            knowledge_dir = Path(__file__).parent.parent / "skills" / "knowledge"
+            if knowledge_dir.exists():
+                self.assistant.skill_loader.load_from_directory(str(knowledge_dir))
+            
+            external_dir = Path(__file__).parent.parent / "skills" / "external"
+            if external_dir.exists():
+                self.assistant.skill_loader.load_from_directory(str(external_dir))
+            
+            self.assistant.matcher = type(self.assistant.matcher)(
+                self.assistant.registry, 
+                self.assistant.loop
+            )
+            
+            print("技能重新加载成功")
+            return True
+        except Exception as e:
+            print(f"重新加载技能失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return False

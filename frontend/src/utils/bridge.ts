@@ -10,6 +10,8 @@ interface PyWebViewWindow extends Window {
       get_history: () => any[]
       get_settings: () => any
       update_settings: (settings: any) => void
+      get_skills: () => any[]
+      reload_skills: () => boolean
     }
   }
 }
@@ -38,6 +40,24 @@ export const api = {
       window.pywebview.api.stop_recording()
     } else {
       console.warn('pywebview.api not available')
+    }
+  },
+
+  getSkills: () => {
+    if (window.pywebview?.api?.get_skills) {
+      return window.pywebview.api.get_skills()
+    } else {
+      console.warn('pywebview.api not available')
+      return []
+    }
+  },
+
+  reloadSkills: () => {
+    if (window.pywebview?.api?.reload_skills) {
+      return window.pywebview.api.reload_skills()
+    } else {
+      console.warn('pywebview.api not available')
+      return false
     }
   }
 }

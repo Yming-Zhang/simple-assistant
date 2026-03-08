@@ -36,16 +36,7 @@ from memory.store import MemoryStore
 from memory.db import MemoryDB
 from memory.conversation import ConversationManager
 
-# 导入内置 Skills
-from skills.builtin.screen import ScreenSkill
-from skills.builtin.camera import CameraSkill
-from skills.builtin.system_cmd import SystemCmdSkill
-from skills.builtin.notification import NotificationSkill
-from skills.builtin.memory import MemorySearchSkill, MemoryGetSkill
-from skills.builtin.terminal import TerminalSkill
-from skills.builtin.browser import BrowserSkill
-from skills.builtin.app_control import AppControlSkill
-from skills.builtin.feishu import FeishuSkill
+# 不再硬编码导入 Skills，改为动态加载
 
 
 class Assistant:
@@ -77,14 +68,34 @@ class Assistant:
         )
         logger.info("记忆系统初始化成功")
         
-        # 注册内置 Skills
-        self._register_builtin_skills()
+        # 从 builtin 目录动态加载内置 Skills
+        builtin_dir = Path(__file__).parent / "skills" / "builtin"
+        if builtin_dir.exists():
+            loaded_count = self.skill_loader.load_from_directory(str(builtin_dir))
+            logger.info(f"从 builtin 目录加载了 {loaded_count} 个 Skills")
+            
+            # 为需要的技能设置 conversation_manager
+            memory_search = self.registry.get("memory_search")
+            if memory_search and hasattr(memory_search, "set_conversation_manager"):
+                memory_search.set_conversation_manager(self.conversation_manager)
+                logger.info("已为 memory_search 设置 conversation_manager")
+            
+            memory_get = self.registry.get("memory_get")
+            if memory_get and hasattr(memory_get, "set_conversation_manager"):
+                memory_get.set_conversation_manager(self.conversation_manager)
+                logger.info("已为 memory_get 设置 conversation_manager")
         
         # 从 knowledge 目录加载 Knowledge Skills
         knowledge_dir = Path(__file__).parent / "skills" / "knowledge"
         if knowledge_dir.exists():
             loaded_count = self.skill_loader.load_from_directory(str(knowledge_dir))
             logger.info(f"从 knowledge 目录加载了 {loaded_count} 个 Skills")
+        
+        # 从 external 目录加载外部 Skills（如果存在）
+        external_dir = Path(__file__).parent / "skills" / "external"
+        if external_dir.exists():
+            loaded_count = self.skill_loader.load_from_directory(str(external_dir))
+            logger.info(f"从 external 目录加载了 {loaded_count} 个 Skills")
         
         # 初始化 LLM 匹配器（优先），传入全局事件循环
         self.matcher = LLMMatcher(self.registry, self.loop)
@@ -105,24 +116,7 @@ class Assistant:
         
         logger.info("电脑助手初始化完成！")
     
-    def _register_builtin_skills(self):
-        """注册内置 Skills"""
-        skills = [
-            ScreenSkill(),
-            CameraSkill(),
-            SystemCmdSkill(),
-            NotificationSkill(),
-            MemorySearchSkill(self.conversation_manager),
-            MemoryGetSkill(self.conversation_manager),
-            TerminalSkill(),
-            BrowserSkill(),
-            AppControlSkill(),
-            FeishuSkill(),
-        ]
-        
-        for skill in skills:
-            self.registry.register(skill)
-            logger.info(f"注册内置 Skill: {skill.name}")
+
     
     def _call_llm_directly(self, text: str) -> Optional[dict]:
         """
