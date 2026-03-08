@@ -42,11 +42,20 @@ class BridgeAPI:
         print("开始录音")
         self._is_recording = True
         self._evaluate_js("onAgentStart")
+        
+        try:
+            from audio.microphone import start_recording as mic_start
+            mic_start()
+        except Exception as e:
+            print(f"启动录音失败: {e}")
+            self._evaluate_js("onAgentError", f"启动录音失败: {e}")
+            self._evaluate_js("onAgentComplete")
+            self._is_recording = False
     
     def stop_recording(self):
         """
         停止录音并处理（前端调用）
-        完整流程：录音 → STT → 发送给 Agent → 推送到前端
+        完整流程：停止录音 → STT → 发送给 Agent → 推送到前端
         """
         print("停止录音")
         self._is_recording = False
@@ -73,12 +82,12 @@ class BridgeAPI:
         使用真实的 Assistant 处理录音
         """
         try:
-            from audio.microphone import record_audio
+            from audio.microphone import stop_recording as mic_stop
             from audio.stt import transcribe
             
-            # 1. 录音（简化版，录 5 秒）
-            self._evaluate_js("onThinking", "正在录音...")
-            audio_file = record_audio(seconds=5)
+            # 1. 停止录音并保存
+            self._evaluate_js("onThinking", "正在处理录音...")
+            audio_file = mic_stop("output.wav")
             
             if not audio_file:
                 self._evaluate_js("onAgentError", "录音失败")
