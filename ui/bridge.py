@@ -108,7 +108,7 @@ class BridgeAPI:
             # 3. 添加用户消息到前端
             self._evaluate_js("onUserMessage", text)
             
-            # 4. 流式调用 LLM
+            # 4. 完整处理流程：匹配工具 → 执行工具 → LLM对话
             self._stream_llm_with_assistant(text)
             
         except Exception as e:
@@ -145,10 +145,10 @@ class BridgeAPI:
     
     def _stream_llm_with_assistant(self, text: str, images: Optional[List[str]] = None):
         """
-        使用真实的 Assistant 流式调用 LLM
+        使用真实的 Assistant 进行完整处理：先匹配工具 → 执行工具 → LLM对话
         """
         self._evaluate_js("onAgentStart")
-        self._evaluate_js("onThinking", "正在思考...")
+        self._evaluate_js("onThinking", "正在分析任务...")
         
         # 预处理文本，避免闭包问题
         processed_text = text
@@ -163,13 +163,17 @@ class BridgeAPI:
                 self._evaluate_js("onThinking", content)
             elif chunk_type == "content":
                 self._evaluate_js("onAgentReply", content)
+            elif chunk_type == "tool_start":
+                self._evaluate_js("onToolStart", content)
+            elif chunk_type == "tool_result":
+                self._evaluate_js("onToolResult", content)
         
         async def stream_task():
             """
             异步流式调用任务
             """
             try:
-                await self.assistant._stream_llm_directly(processed_text, on_chunk)
+                await self.assistant._stream_process(processed_text, on_chunk)
                 self._evaluate_js("onAgentComplete")
             except Exception as e:
                 print(f"流式调用失败: {e}")

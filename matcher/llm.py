@@ -138,3 +138,63 @@ class LLMMatcher(BaseMatcher):
     def get_last_reasoning(self) -> Optional[str]:
         """获取最后一次的 reasoning（推导链）"""
         return self.last_reasoning
+    
+    async def stream_match(self, text: str, on_chunk):
+        """
+        流式匹配文本，找到对应的 Skill 和参数
+        
+        Args:
+            text: 输入文本
+            on_chunk: 回调函数，接收 (type, content)，type 可以是 'reasoning' 或 'content'
+            
+        Returns:
+            (skill, params): 匹配到的 Skill 和参数元组
+        """
+        self.last_reasoning = None
+        
+        if self.provider is None:
+            print("LLM Provider 未初始化，回退到关键词匹配")
+            from .keyword import KeywordMatcher
+            return KeywordMatcher(self.registry).match(text)
+        
+        try:
+            messages = [
+                {"role": "system", "content": self._build_system_prompt()},
+                {"role": "user", "content": text}
+            ]
+            
+            full_reasoning = ""
+            full_content = ""
+            
+            async for chunk in self.provider.stream_chat(messages, include_reasoning=True):
+                if chunk.reasoning:
+                    full_reasoning += chunk.reasoning
+                    await on_chunk("reasoning", full_reasoning)
+                
+                if chunk.content:
+                    full_content += chunk.content
+                
+                if chunk.is_finished:
+                    break
+            
+            self.last_reasoning = full_reasoning
+            
+            parsed = self._parse_response(full_content)
+            
+            if parsed and parsed.get("skill_name"):
+                skill = self.registry.get(parsed["skill_name"])
+                if skill:
+                    print(f"LLM 匹配到: {skill.name} (置信度: {parsed.get('confidence', 0)})")
+                    if self.last_reasoning:
+                        print(f"推理: {self.last_reasoning}")
+                    return skill, parsed.get("params", {})
+            
+            return None, None
+            
+        except Exception as e:
+            print(f"LLM 匹配出错: {e}")
+            import traceback
+            print(traceback.format_exc())
+            print("回退到关键词匹配")
+            from .keyword import KeywordMatcher
+            return KeywordMatcher(self.registry).match(text)
