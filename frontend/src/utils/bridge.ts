@@ -204,6 +204,8 @@ export function registerCallbacks() {
     chatStore.setLoading(false)
     chatStore.markLastMessageDone()
     chatStore.attachThinkingChainToLastMessage()
+    // 刷新侧栏会话列表（新对话/消息计数可能变化）
+    chatStore.loadConversationList()
   }
 
   ;(window as any).onUserMessage = (text: string) => {

@@ -69,6 +69,14 @@ class Assistant:
         
         # 注入 DB 到全局设置管理器
         settings_manager.set_db(self.memory_db)
+        
+        # 恢复上次会话（防止重启后丢失上下文）
+        last_conv_id = self.conversation_manager.resume_last_conversation()
+        if last_conv_id:
+            logger.info(f"已恢复上次会话: {last_conv_id}")
+        else:
+            logger.info("没有历史会话，将在首次消息时自动创建")
+        
         logger.info("记忆系统初始化成功")
         
         # 从 builtin 目录动态加载内置 Skills

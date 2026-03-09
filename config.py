@@ -1,4 +1,5 @@
 from typing import Optional
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -102,7 +103,7 @@ class LLMConfig(BaseSettings):
 
 class MemoryConfig(BaseSettings):
     """记忆系统配置"""
-    data_dir: str = "./data/memory"
+    data_dir: str = str(Path(__file__).parent / "data" / "memory")
     conversations_dir: str = "conversations"
     long_term_memory_file: str = "MEMORY.md"
     max_sliding_window: int = 10

@@ -68,9 +68,11 @@ class BridgeAPI:
             return []
     
     def get_conversation(self, conv_id: str):
-        """获取指定会话的完整内容"""
+        """获取指定会话的完整内容，同时激活该会话为当前会话"""
         try:
             if self.assistant and hasattr(self.assistant, 'conversation_manager'):
+                # 切换后端当前活跃会话
+                self.assistant.conversation_manager.set_current_conversation(conv_id)
                 conv = self.assistant.conversation_manager.get_conversation(conv_id)
                 if conv:
                     # 转换消息格式
@@ -97,10 +99,11 @@ class BridgeAPI:
             return None
     
     def create_conversation(self):
-        """创建新会话，返回 conversation id"""
+        """创建新会话，返回 conversation id（同时激活为当前会话）"""
         try:
             if self.assistant and hasattr(self.assistant, 'conversation_manager'):
                 conv_id = self.assistant.conversation_manager.create_conversation()
+                # create_conversation 内部已经 set _current_conversation_id
                 return conv_id
             return None
         except Exception as e:

@@ -130,6 +130,10 @@ onMounted(async () => {
   await settingsStore.loadSettings()
   // 加载真实会话列表
   await chatStore.loadConversationList()
+  // 自动切换到最近的会话（如果还没有激活的会话）
+  if (!chatStore.activeConversationId && chatStore.conversationList.length > 0) {
+    await chatStore.switchConversation(chatStore.conversationList[0].id)
+  }
 })
 
 // ---- 会话操作 ----

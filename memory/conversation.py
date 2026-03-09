@@ -74,6 +74,15 @@ class ConversationManager:
             self._current_conversation_id = None
             self.current_session = []
         return success
+
+    def resume_last_conversation(self) -> Optional[str]:
+        """恢复最近一次会话（启动时调用），返回 conversation_id 或 None"""
+        convs = self.list_conversations(limit=1)
+        if convs:
+            last_id = convs[0]["id"]
+            self.set_current_conversation(last_id)
+            return last_id
+        return None
     
     # ---- 消息操作 ----
     
