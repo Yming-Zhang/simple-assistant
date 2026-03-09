@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from .store import MemoryStore
 from .db import MemoryDB
 
 class ConversationManager:
-    """会话管理（滑动窗口 + 记忆注入）"""
+    """会话管理（支持多会话 + 滑动窗口 + 记忆注入）"""
     
     def __init__(self, store: MemoryStore, db: MemoryDB, 
                  max_sliding_window: int = 10):
@@ -12,18 +12,87 @@ class ConversationManager:
         self.db = db
         self.max_sliding_window = max_sliding_window
         self.current_session: List[Dict[str, Any]] = []
+        self._current_conversation_id: Optional[str] = None
+    
+    # ---- 会话级 CRUD ----
+    
+    @property
+    def current_conversation_id(self) -> Optional[str]:
+        return self._current_conversation_id
+    
+    def ensure_conversation(self) -> str:
+        """确保有一个当前会话，没有则自动创建"""
+        if not self._current_conversation_id:
+            self._current_conversation_id = self.create_conversation()
+        return self._current_conversation_id
+    
+    def set_current_conversation(self, conv_id: str):
+        """切换当前会话，加载其消息到 session"""
+        self._current_conversation_id = conv_id
+        # 从 DB 加载消息到 sliding window
+        messages = self.db.get_conversation_messages(conv_id)
+        self.current_session = []
+        for msg in messages:
+            self.current_session.append({
+                "role": msg["role"],
+                "content": msg["content"],
+                "timestamp": msg.get("timestamp", ""),
+                "images": msg.get("images", [])
+            })
+        # 限制滑动窗口
+        if len(self.current_session) > self.max_sliding_window * 2:
+            self.current_session = self.current_session[-self.max_sliding_window * 2:]
+    
+    def create_conversation(self, title: str = "新对话") -> str:
+        """创建新会话，返回 conversation_id"""
+        conv_id = self.db.create_conversation(title)
+        self._current_conversation_id = conv_id
+        self.current_session = []
+        return conv_id
+    
+    def list_conversations(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """列出所有会话摘要"""
+        return self.db.list_conversations(limit)
+    
+    def get_conversation(self, conv_id: str) -> Optional[Dict[str, Any]]:
+        """获取指定会话的完整信息（包含消息列表）"""
+        conv = self.db.get_conversation(conv_id)
+        if not conv:
+            return None
+        messages = self.db.get_conversation_messages(conv_id)
+        conv["messages"] = messages
+        return conv
+    
+    def rename_conversation(self, conv_id: str, title: str) -> bool:
+        """重命名会话"""
+        return self.db.rename_conversation(conv_id, title)
+    
+    def delete_conversation(self, conv_id: str) -> bool:
+        """删除会话"""
+        success = self.db.delete_conversation(conv_id)
+        if success and self._current_conversation_id == conv_id:
+            self._current_conversation_id = None
+            self.current_session = []
+        return success
+    
+    # ---- 消息操作 ----
     
     def add_message(self, role: str, content: str, 
-                   timestamp: datetime = None) -> str:
+                   timestamp: datetime = None,
+                   images: Optional[List[str]] = None) -> str:
         """添加消息到当前会话并持久化"""
         if timestamp is None:
             timestamp = datetime.now()
+        
+        # 确保有当前会话
+        conv_id = self.ensure_conversation()
         
         # 构建消息对象
         msg = {
             "role": role,
             "content": content,
-            "timestamp": timestamp
+            "timestamp": timestamp,
+            "images": images or []
         }
         
         # 添加到当前会话
@@ -33,11 +102,19 @@ class ConversationManager:
         if len(self.current_session) > self.max_sliding_window * 2:
             self.current_session = self.current_session[-self.max_sliding_window * 2:]
         
-        # 持久化到 Markdown 和 SQLite
+        # 提取主题（用于自动命名会话）
         topic = self._extract_topic(content) if role == "user" else None
         
+        # 如果是第一条用户消息，自动给会话起名
+        if role == "user" and topic:
+            conv = self.db.get_conversation(conv_id)
+            if conv and conv.get("title") == "新对话":
+                auto_title = content[:20] + ("..." if len(content) > 20 else "")
+                self.db.rename_conversation(conv_id, auto_title)
+        
+        # 持久化到 Markdown 和 SQLite
         self.store.append_message(role, content, timestamp)
-        self.db.insert_message(timestamp, role, content, topic)
+        self.db.insert_message(timestamp, role, content, topic, conv_id, images)
         
         return content
     
@@ -47,6 +124,7 @@ class ConversationManager:
         if timestamp is None:
             timestamp = datetime.now()
         
+        conv_id = self.ensure_conversation()
         topic = self._extract_topic(user_msg)
         
         # 添加到当前会话
@@ -59,7 +137,7 @@ class ConversationManager:
         
         # 持久化
         self.store.append_conversation(user_msg, assistant_msg, timestamp)
-        self.db.insert_conversation(timestamp, user_msg, assistant_msg, topic)
+        self.db.insert_conversation(timestamp, user_msg, assistant_msg, topic, conv_id)
     
     def _extract_topic(self, user_msg: str) -> str:
         """提取简短主题"""
@@ -67,6 +145,8 @@ class ConversationManager:
         if len(user_msg) > 10:
             topic += "..."
         return topic
+    
+    # ---- 上下文构建 ----
     
     def get_sliding_window(self) -> List[Dict[str, str]]:
         """获取当前滑动窗口（用于 LLM 上下文）"""

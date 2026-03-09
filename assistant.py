@@ -29,7 +29,7 @@ from skills.loader import SkillLoader
 from llm.base import LLMProvider
 from llm.response import ChatResponse
 from llm.factory import LLMProviderFactory
-from config import config
+from config import config, settings_manager
 
 # 记忆系统
 from memory.store import MemoryStore
@@ -66,6 +66,9 @@ class Assistant:
             self.memory_db,
             max_sliding_window=config.memory.max_sliding_window
         )
+        
+        # 注入 DB 到全局设置管理器
+        settings_manager.set_db(self.memory_db)
         logger.info("记忆系统初始化成功")
         
         # 从 builtin 目录动态加载内置 Skills
@@ -330,6 +333,9 @@ class Assistant:
             if reasoning:
                 logger.info(f"匹配推理: {reasoning}")
             
+            # 获取唤醒来源，用于决定是否 TTS
+            wake_source = self.wake_system.last_wake_source
+            
             if skill:
                 logger.info(f"匹配到 Skill: {skill.name}")
                 
@@ -340,8 +346,8 @@ class Assistant:
                 # 添加助手回复到记忆
                 self.conversation_manager.add_message("assistant", result)
                 
-                # 6. TTS 播放结果
-                self._speak(result)
+                # 6. TTS 播放结果（根据唤醒来源决定）
+                self._speak(result, wake_source=wake_source)
             else:
                 logger.warning(f"未匹配到任何 Skill: {text}")
                 
@@ -354,11 +360,11 @@ class Assistant:
                     # 添加助手回复到记忆
                     self.conversation_manager.add_message("assistant", llm_response)
                     
-                    self._speak(llm_response)
+                    self._speak(llm_response, wake_source=wake_source)
                 else:
                     response = "抱歉，我还不支持这个功能"
                     self.conversation_manager.add_message("assistant", response)
-                    self._speak(response)
+                    self._speak(response, wake_source=wake_source)
                 
         except Exception as e:
             logger.error(f"处理唤醒事件时出错: {str(e)}")
@@ -366,15 +372,16 @@ class Assistant:
         finally:
             logger.info("唤醒事件处理完成")
     
-    def _speak(self, text: str):
+    def _speak(self, text: str, wake_source: str = "manual"):
         """
-        播放语音
+        播放语音（根据唤醒来源和配置决定是否播报）
         
         Args:
             text: 要播放的文本
+            wake_source: 唤醒来源 'voice' | 'key' | 'manual'
         """
         try:
-            speak(text)
+            speak(text, wake_source=wake_source)
         except Exception as e:
             logger.error(f"播放语音失败: {str(e)}")
     

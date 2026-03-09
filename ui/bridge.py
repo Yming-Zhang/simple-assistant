@@ -1,7 +1,10 @@
 import time
 import threading
 import asyncio
+import traceback
 from typing import Optional, List, Any, Dict
+
+from config import settings_manager
 
 
 class BridgeAPI:
@@ -20,6 +23,10 @@ class BridgeAPI:
         self._stream_loop = asyncio.new_event_loop()
         self._stream_thread = None
         self._stream_running = False
+        
+        # 注入 SettingsManager 的 DB
+        if self.assistant and hasattr(self.assistant, 'memory_db'):
+            settings_manager.set_db(self.assistant.memory_db)
     
     def set_window(self, window):
         self.window = window
@@ -34,6 +41,125 @@ class BridgeAPI:
                 self.window.evaluate_js(f"{func_name}({args_str})")
             except Exception as e:
                 print(f"JS 调用失败: {e}")
+    
+    # ======== 会话管理 API ========
+    
+    def get_history_list(self):
+        """获取会话列表（真实数据）"""
+        try:
+            if self.assistant and hasattr(self.assistant, 'conversation_manager'):
+                convs = self.assistant.conversation_manager.list_conversations()
+                # 转为前端友好格式
+                result = []
+                for c in convs:
+                    result.append({
+                        "id": c["id"],
+                        "title": c.get("title", "新对话"),
+                        "preview": c.get("preview") or "",
+                        "created_at": c.get("created_at", ""),
+                        "updated_at": c.get("updated_at", ""),
+                        "message_count": c.get("message_count", 0)
+                    })
+                return result
+            return []
+        except Exception as e:
+            print(f"获取会话列表失败: {e}")
+            traceback.print_exc()
+            return []
+    
+    def get_conversation(self, conv_id: str):
+        """获取指定会话的完整内容"""
+        try:
+            if self.assistant and hasattr(self.assistant, 'conversation_manager'):
+                conv = self.assistant.conversation_manager.get_conversation(conv_id)
+                if conv:
+                    # 转换消息格式
+                    messages = []
+                    for m in conv.get("messages", []):
+                        messages.append({
+                            "id": str(m.get("id", "")),
+                            "role": m["role"],
+                            "content": m["content"],
+                            "timestamp": m.get("timestamp", ""),
+                            "images": m.get("images", [])
+                        })
+                    return {
+                        "id": conv["id"],
+                        "title": conv.get("title", "新对话"),
+                        "created_at": conv.get("created_at", ""),
+                        "updated_at": conv.get("updated_at", ""),
+                        "messages": messages
+                    }
+            return None
+        except Exception as e:
+            print(f"获取会话详情失败: {e}")
+            traceback.print_exc()
+            return None
+    
+    def create_conversation(self):
+        """创建新会话，返回 conversation id"""
+        try:
+            if self.assistant and hasattr(self.assistant, 'conversation_manager'):
+                conv_id = self.assistant.conversation_manager.create_conversation()
+                return conv_id
+            return None
+        except Exception as e:
+            print(f"创建会话失败: {e}")
+            traceback.print_exc()
+            return None
+    
+    def rename_conversation(self, conv_id: str, title: str):
+        """重命名会话"""
+        try:
+            if self.assistant and hasattr(self.assistant, 'conversation_manager'):
+                return self.assistant.conversation_manager.rename_conversation(conv_id, title)
+            return False
+        except Exception as e:
+            print(f"重命名会话失败: {e}")
+            traceback.print_exc()
+            return False
+    
+    def delete_conversation(self, conv_id: str):
+        """删除会话"""
+        try:
+            if self.assistant and hasattr(self.assistant, 'conversation_manager'):
+                return self.assistant.conversation_manager.delete_conversation(conv_id)
+            return False
+        except Exception as e:
+            print(f"删除会话失败: {e}")
+            traceback.print_exc()
+            return False
+    
+    # ======== 设置 API ========
+    
+    def get_settings(self):
+        """获取所有设置（真实持久化数据）"""
+        try:
+            return settings_manager.get_all()
+        except Exception as e:
+            print(f"获取设置失败: {e}")
+            traceback.print_exc()
+            return settings_manager.UI_DEFAULTS
+    
+    def update_settings(self, settings: dict):
+        """更新设置（写入 DB + 同步 Python config）"""
+        try:
+            print(f"更新设置: {settings}")
+            settings_manager.update(settings)
+            return True
+        except Exception as e:
+            print(f"更新设置失败: {e}")
+            traceback.print_exc()
+            return False
+    
+    def validate_whisper_path(self, path: str):
+        """校验 Whisper 路径"""
+        try:
+            return settings_manager.validate_whisper_path(path)
+        except Exception as e:
+            return {"valid": False, "message": str(e)}
+    
+    # ======== 录音 API ========
     
     def start_recording(self):
         """
@@ -109,7 +235,8 @@ class BridgeAPI:
             self._evaluate_js("onUserMessage", text)
             
             # 4. 完整处理流程：匹配工具 → 执行工具 → LLM对话
-            self._stream_llm_with_assistant(text)
+            # 标记唤醒来源为语音
+            self._stream_llm_with_assistant(text, wake_source="voice")
             
         except Exception as e:
             print(f"处理失败: {e}")
@@ -128,8 +255,8 @@ class BridgeAPI:
                 self._evaluate_js("onUserMessage", text)
                 
                 if self.assistant:
-                    # 流式调用 LLM
-                    self._stream_llm_with_assistant(text, images)
+                    # 流式调用 LLM，标记唤醒来源为手动
+                    self._stream_llm_with_assistant(text, images, wake_source="manual")
                 else:
                     # 模拟响应
                     self._simulate_response(text, images)
@@ -143,9 +270,11 @@ class BridgeAPI:
         thread.daemon = True
         thread.start()
     
-    def _stream_llm_with_assistant(self, text: str, images: Optional[List[str]] = None):
+    def _stream_llm_with_assistant(self, text: str, images: Optional[List[str]] = None,
+                                    wake_source: str = "manual"):
         """
         使用真实的 Assistant 进行完整处理：先匹配工具 → 执行工具 → LLM对话
+        wake_source: 'voice' | 'key' | 'manual'
         """
         self._evaluate_js("onAgentStart")
         self._evaluate_js("onThinking", "正在分析任务...")
@@ -174,10 +303,13 @@ class BridgeAPI:
             """
             try:
                 await self.assistant._stream_process(processed_text, on_chunk)
+                
+                # 处理完成后，判断是否需要 TTS 播报
+                self._maybe_tts_reply(wake_source)
+                
                 self._evaluate_js("onAgentComplete")
             except Exception as e:
                 print(f"流式调用失败: {e}")
-                import traceback
                 traceback.print_exc()
                 self._evaluate_js("onAgentError", str(e))
                 self._evaluate_js("onAgentComplete")
@@ -194,6 +326,35 @@ class BridgeAPI:
         stream_thread = threading.Thread(target=run_stream)
         stream_thread.daemon = True
         stream_thread.start()
+    
+    def _maybe_tts_reply(self, wake_source: str):
+        """根据设置和唤醒来源决定是否 TTS 播报"""
+        try:
+            from config import config
+            
+            if not config.tts.enabled:
+                return
+            
+            if config.tts.only_when_wake_by_voice and wake_source != "voice":
+                return
+            
+            # 获取最后一条 assistant 消息
+            if self.assistant and hasattr(self.assistant, 'conversation_manager'):
+                session = self.assistant.conversation_manager.current_session
+                if session:
+                    last = session[-1]
+                    if last.get("role") == "assistant" and last.get("content"):
+                        content = last["content"]
+                        # 截取前 200 字播报
+                        if len(content) > 200:
+                            content = content[:200] + "..."
+                        from audio.tts import get_tts
+                        tts = get_tts()
+                        tts.speak(content)
+        except Exception as e:
+            print(f"TTS 播报失败: {e}")
+    
+    # ======== 模拟方法（无 assistant 时） ========
     
     def _simulate_process(self):
         """
@@ -246,24 +407,13 @@ class BridgeAPI:
         
         self._evaluate_js("onAgentComplete")
     
+    # ======== 旧兼容 API（重定向到新方法） ========
+    
     def get_history(self):
-        return [
-            {"id": "1", "date": "2026-03-07", "title": "今天的天气怎么样"},
-            {"id": "2", "date": "2026-03-07", "title": "打开 Chrome 浏览器"},
-            {"id": "3", "date": "2026-03-06", "title": "设置提醒"},
-            {"id": "4", "date": "2026-03-06", "title": "创建文档"},
-            {"id": "5", "date": "2026-03-05", "title": "音乐播放"}
-        ]
+        """兼容旧前端调用"""
+        return self.get_history_list()
     
-    def get_settings(self):
-        return {
-            "showThinkingChain": True,
-            "model": "qwen3.5",
-            "temperature": 0.7
-        }
-    
-    def update_settings(self, settings: dict):
-        print(f"更新设置: {settings}")
+    # ======== Skills API ========
     
     def get_skills(self):
         """获取所有已加载的技能列表"""
@@ -322,6 +472,5 @@ class BridgeAPI:
             return True
         except Exception as e:
             print(f"重新加载技能失败: {e}")
-            import traceback
             traceback.print_exc()
             return False

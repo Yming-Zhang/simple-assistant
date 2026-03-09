@@ -12,13 +12,24 @@ class WakeSystem:
         self.key_detector = key_detector or get_key_detector()
         self.voice_detector = voice_detector or get_voice_detector()
         self.callback: Optional[Callable] = None
+        # 记录最近一次唤醒来源: 'voice' | 'key' | 'manual'
+        self._last_wake_source: str = "manual"
+
+    @property
+    def last_wake_source(self) -> str:
+        """获取最近一次唤醒来源"""
+        return self._last_wake_source
+    
+    def set_wake_source(self, source: str):
+        """手动设置唤醒来源（供 bridge 等外部调用）"""
+        self._last_wake_source = source
 
     def start(self, callback: Callable, enable_voice: bool = True, enable_key: bool = True) -> None:
         """
         启动唤醒系统
         
         Args:
-            callback: 当唤醒被触发时调用的回调函数
+            callback: 当唤醒被触发时调用的回调函数，接收 wake_source 参数
             enable_voice: 是否启用语音唤醒
             enable_key: 是否启用按键唤醒
         """
@@ -29,10 +40,10 @@ class WakeSystem:
         print("=" * 50)
         
         if enable_key:
-            self.key_detector.start(self._on_wake)
+            self.key_detector.start(self._on_key_wake)
         
         if enable_voice:
-            self.voice_detector.start(self._on_wake)
+            self.voice_detector.start(self._on_voice_wake)
         
         print("\n等待唤醒...")
         print(f"  - 按键唤醒: {self.key_detector.hotkey}")
@@ -41,8 +52,17 @@ class WakeSystem:
         else:
             print("  - 语音唤醒: 未配置 (需要 Access Key)")
 
-    def _on_wake(self) -> None:
-        """唤醒触发时的内部回调"""
+    def _on_key_wake(self) -> None:
+        """快捷键唤醒回调"""
+        self._last_wake_source = "key"
+        print(f"[WakeSystem] 唤醒来源: key")
+        if self.callback:
+            self.callback()
+
+    def _on_voice_wake(self) -> None:
+        """语音唤醒回调"""
+        self._last_wake_source = "voice"
+        print(f"[WakeSystem] 唤醒来源: voice")
         if self.callback:
             self.callback()
 
@@ -76,7 +96,8 @@ if __name__ == "__main__":
     print("按 Ctrl+C 退出\n")
     
     def on_wake():
-        print("\n✅ 唤醒触发！")
+        ws = get_wake_system()
+        print(f"\n✅ 唤醒触发！来源: {ws.last_wake_source}")
         print("等待下一次唤醒...\n")
     
     wake_system = WakeSystem()
