@@ -134,6 +134,7 @@ function scrollToBottom() {
 .app-logo {
   font-size: 18px;
   background: var(--accent-gradient);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 700;
@@ -257,6 +258,7 @@ function scrollToBottom() {
 .empty-icon {
   font-size: 48px;
   background: var(--accent-gradient);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   opacity: 0.6;

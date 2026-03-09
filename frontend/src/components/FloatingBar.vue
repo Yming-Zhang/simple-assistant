@@ -108,6 +108,7 @@ function onDragEnd() {
 .capsule-logo {
   font-size: 22px;
   background: var(--accent-gradient);
+  background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 700;
