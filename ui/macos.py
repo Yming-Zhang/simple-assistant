@@ -217,6 +217,8 @@ def _do_enter_float_mode():
         ns_win.setOpaque_(False)
         ns_win.setBackgroundColor_(AppKit.NSColor.clearColor())
         ns_win.setHasShadow_(False)
+        # 允许通过背景拖动窗口
+        ns_win.setMovableByWindowBackground_(True)
 
         # WKWebView 也需要透明（消除矩形白色底框）
         if wk:
@@ -286,6 +288,8 @@ def _do_exit_float_mode():
         ns_win.setOpaque_(_saved_state["isOpaque"])
         ns_win.setBackgroundColor_(_saved_state["backgroundColor"])
         ns_win.setHasShadow_(_saved_state["hasShadow"])
+        # 恢复原始拖动行为
+        ns_win.setMovableByWindowBackground_(False)
 
         # 恢复窗口尺寸和位置
         ns_win.setFrame_display_animate_(_saved_state["frame"], True, True)

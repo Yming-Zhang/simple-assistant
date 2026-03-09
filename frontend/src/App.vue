@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import FloatingBar from './components/FloatingBar.vue'
 import ChatWindow from './components/ChatWindow.vue'
 import { registerCallbacks } from '@/utils/bridge'
@@ -33,6 +33,11 @@ function onPyWebViewReady() {
   })
   settingsStore.loadSettings()
 }
+
+// 同步 float-mode 到 html 根元素，确保 html/body 也能透明
+watch(isExpanded, (expanded) => {
+  document.documentElement.classList.toggle('float-mode', !expanded)
+}, { immediate: true })
 
 onMounted(() => {
   registerCallbacks()

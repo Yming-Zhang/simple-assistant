@@ -13,9 +13,6 @@
         <button class="win-btn" title="最小化" @click="emit('minimize')">
           <svg width="12" height="12" viewBox="0 0 12 12"><rect y="5" width="12" height="2" rx="1" fill="currentColor"/></svg>
         </button>
-        <button class="win-btn close-btn" title="关闭" @click="emit('close')">
-          <svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </button>
       </div>
     </header>
 

@@ -1,11 +1,11 @@
 <template>
   <div class="floating-wrapper">
-    <div class="floating-capsule" @click="emit('expand')">
-      <!-- 品牌 / 图标 -->
-      <span class="capsule-logo">✦</span>
+    <div class="floating-capsule">
+      <!-- 品牌 / 图标（可点击展开） -->
+      <span class="capsule-logo capsule-clickable" @click="emit('expand')">✦</span>
 
-      <!-- 引导文案 -->
-      <span class="capsule-text">有什么可以帮你的？</span>
+      <!-- 引导文案（可点击展开） -->
+      <span class="capsule-text capsule-clickable" @click="emit('expand')">有什么可以帮你的？</span>
 
       <!-- 右侧操作 -->
       <div class="capsule-actions" @click.stop>
@@ -58,10 +58,12 @@ function toggleMic() {
   border-radius: var(--radius-pill);
   box-shadow: var(--floating-shadow);
   border: 1px solid var(--border-subtle);
-  cursor: pointer;
+  cursor: default;
   transition: all var(--transition-normal);
   user-select: none;
   animation: bounceIn 0.4s ease;
+  /* 整个胶囊可拖动 */
+  -webkit-app-region: drag;
 }
 
 .floating-capsule:hover {
@@ -84,10 +86,17 @@ function toggleMic() {
   letter-spacing: -0.01em;
 }
 
+.capsule-clickable {
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+}
+
 .capsule-actions {
   display: flex;
   gap: 4px;
   margin-left: 4px;
+  /* 按钮区域不参与拖拽，允许点击 */
+  -webkit-app-region: no-drag;
 }
 
 .capsule-btn {
