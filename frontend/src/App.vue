@@ -1,11 +1,9 @@
 <template>
-  <div id="app">
-    <div v-if="!isExpanded" class="floating-container">
-      <FloatingBar @expand="expandChat" />
-    </div>
-    <div v-else class="chat-container">
-      <ChatWindow @minimize="minimizeChat" @close="closeChat" />
-    </div>
+  <div id="app" class="app-shell" :data-theme="settingsStore.theme">
+    <transition name="mode" mode="out-in">
+      <FloatingBar v-if="!isExpanded" key="floating" @expand="expandChat" />
+      <ChatWindow v-else key="expanded" @minimize="minimizeChat" @close="closeChat" />
+    </transition>
   </div>
 </template>
 
@@ -21,11 +19,9 @@ const isExpanded = ref(true)
 const chatStore = useChatStore()
 const settingsStore = useSettingsStore()
 
-// pywebviewready 保证 API 已就绪再加载数据
 function onPyWebViewReady() {
   console.log('pywebviewready fired, loading data...')
   chatStore.loadConversationList().then(() => {
-    // 自动切换到最近的会话
     if (!chatStore.activeConversationId && chatStore.conversationList.length > 0) {
       chatStore.switchConversation(chatStore.conversationList[0].id)
     }
@@ -34,11 +30,8 @@ function onPyWebViewReady() {
 }
 
 onMounted(() => {
-  // 注册 Python→JS 回调
   registerCallbacks()
-  // 监听 pywebviewready 事件
   window.addEventListener('pywebviewready', onPyWebViewReady)
-  // 如果 pywebview.api 已经存在（事件已触发过），立即加载
   if ((window as any).pywebview?.api) {
     onPyWebViewReady()
   }
@@ -53,33 +46,32 @@ function minimizeChat() {
 }
 
 function closeChat() {
-  console.log('Close chat')
+  try {
+    const pywebview = (window as any).pywebview
+    if (pywebview?.api?.close_window) {
+      pywebview.api.close_window()
+    } else {
+      window.close()
+    }
+  } catch {
+    window.close()
+  }
 }
 </script>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html, body, #app {
+.app-shell {
   height: 100%;
   width: 100%;
+  background: var(--app-bg);
   overflow: hidden;
 }
 
-.floating-container {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.1);
+/* 悬浮 ↔ 展开 过渡动画 */
+.mode-enter-active {
+  animation: bounceIn 0.35s ease;
 }
-
-.chat-container {
-  height: 100%;
-  width: 100%;
+.mode-leave-active {
+  animation: fadeIn 0.2s ease reverse;
 }
 </style>

@@ -1,14 +1,14 @@
 <template>
-  <div class="status-bar">
-    <div class="status-content">
-      <span v-if="chatStore.isLoading" class="status-loading">
-        <el-icon class="is-loading"><Loading /></el-icon>
-        {{ getStatusText() }}
-      </span>
-      <span v-else class="status-idle">
-        <el-icon><CircleCheck /></el-icon>
-        就绪
-      </span>
+  <div class="status-bar" v-if="chatStore.isLoading || hasError">
+    <div class="status-inner">
+      <template v-if="hasError">
+        <span class="status-dot error" />
+        <span class="status-text error">发生错误</span>
+      </template>
+      <template v-else-if="chatStore.isLoading">
+        <span class="status-dot loading" />
+        <span class="status-text">{{ statusText }}</span>
+      </template>
     </div>
   </div>
 </template>
@@ -16,58 +16,62 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
-import { Loading, CircleCheck } from '@element-plus/icons-vue'
 
 const chatStore = useChatStore()
 
-function getStatusText(): string {
-  const thinking = chatStore.currentThinkingChain
-  if (thinking.length > 0) {
-    const lastEvent = thinking[thinking.length - 1]
-    switch (lastEvent.type) {
-      case 'thinking':
-        return '思考中...'
-      case 'tool_start':
-        return '调用工具中...'
-      case 'tool_result':
-        return '工具执行完成'
-      case 'error':
-        return '发生错误'
-      default:
-        return '处理中...'
-    }
+const hasError = computed(() => {
+  const chain = chatStore.currentThinkingChain
+  return chain.length > 0 && chain[chain.length - 1].type === 'error'
+})
+
+const statusText = computed(() => {
+  const chain = chatStore.currentThinkingChain
+  if (chain.length === 0) return '处理中…'
+  const last = chain[chain.length - 1]
+  switch (last.type) {
+    case 'thinking': return '思考中…'
+    case 'tool_start': return '调用工具…'
+    case 'tool_result': return '工具执行完成'
+    default: return '处理中…'
   }
-  return '处理中...'
-}
+})
 </script>
 
 <style scoped>
 .status-bar {
-  height: 32px;
-  background: #f5f7fa;
-  border-top: 1px solid #e4e7ed;
+  padding: 0 16px;
+  height: 26px;
   display: flex;
   align-items: center;
-  padding: 0 16px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--panel-bg);
 }
 
-.status-content {
+.status-inner {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: #909399;
 }
 
-.status-loading {
-  color: #409eff;
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.loading {
+  background: var(--accent-color);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.status-dot.error {
+  background: var(--error-color);
 }
 
-.status-idle {
-  color: #67c23a;
+.status-text {
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
-
-.status-content .el-icon {
-  font-size: 14px;
+.status-text.error {
+  color: var(--error-color);
 }
 </style>

@@ -1,60 +1,83 @@
 <template>
   <div class="chat-window">
-    <el-container class="chat-container">
-      <el-aside width="260px" class="chat-sidebar">
-        <Sidebar />
-      </el-aside>
-      
-      <el-container class="chat-main">
-        <el-header class="chat-header">
-          <div class="header-left">
-            <span class="header-title">Simple Assistant</span>
+    <!-- 顶部标题栏（无边框拖拽区） -->
+    <header class="title-bar drag-region">
+      <div class="title-bar-left no-drag">
+        <span class="app-logo">✦</span>
+        <span class="app-title">Simple Assistant</span>
+      </div>
+      <div class="title-bar-center no-drag">
+        <ThemeSwitcher compact />
+      </div>
+      <div class="title-bar-right no-drag">
+        <button class="win-btn" title="最小化" @click="emit('minimize')">
+          <svg width="12" height="12" viewBox="0 0 12 12"><rect y="5" width="12" height="2" rx="1" fill="currentColor"/></svg>
+        </button>
+        <button class="win-btn close-btn" title="关闭" @click="emit('close')">
+          <svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <div class="main-body">
+      <!-- 侧栏 -->
+      <aside class="sidebar-pane" :class="{ collapsed: !showSidebar }">
+        <Sidebar v-if="showSidebar" @toggle="showSidebar = !showSidebar" />
+      </aside>
+
+      <!-- 侧栏折叠时的呼出按钮 -->
+      <button v-if="!showSidebar" class="sidebar-toggle-btn" @click="showSidebar = true" title="展开侧栏">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+
+      <!-- 聊天主区 -->
+      <div class="chat-pane">
+        <!-- 消息列表 -->
+        <div class="messages-area" ref="messagesRef">
+          <!-- 空状态 -->
+          <div v-if="chatStore.messages.length === 0 && !chatStore.isLoading" class="empty-state slide-up">
+            <div class="empty-icon">✦</div>
+            <div class="empty-title">有什么可以帮你的？</div>
+            <div class="empty-hint">输入文字或按住录音开始对话</div>
           </div>
-          <div class="header-right">
-            <el-button size="small" circle @click="emit('minimize')">
-              <el-icon><Minus /></el-icon>
-            </el-button>
-            <el-button size="small" circle @click="emit('close')">
-              <el-icon><Close /></el-icon>
-            </el-button>
-          </div>
-        </el-header>
-        
-        <el-main class="chat-messages" ref="messagesContainerRef">
+
+          <!-- 消息列表 -->
           <div class="messages-list">
             <MessageBubble v-for="msg in chatStore.messages" :key="msg.id" :message="msg" />
-            <div v-if="chatStore.isLoading && chatStore.currentThinkingChain.length > 0 && settingsStore.showThinkingChain" class="current-thinking">
-              <el-divider content-position="left">🔄 当前思考过程</el-divider>
+
+            <!-- 实时思考过程 -->
+            <div v-if="chatStore.isLoading && chatStore.currentThinkingChain.length > 0" class="live-thinking slide-up">
               <ThinkingChain :events="chatStore.currentThinkingChain" />
             </div>
           </div>
-        </el-main>
-        
+        </div>
+
+        <!-- 状态栏 -->
         <StatusBar />
-        
-        <el-footer class="chat-footer">
-          <InputArea />
-        </el-footer>
-      </el-container>
-    </el-container>
+
+        <!-- 输入区 -->
+        <InputArea />
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch, nextTick, ref } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
 import { useSettingsStore } from '@/stores/settings'
-import { registerCallbacks } from '@/utils/bridge'
-import { Minus, Close } from '@element-plus/icons-vue'
 import Sidebar from './Sidebar.vue'
 import MessageBubble from './MessageBubble.vue'
 import InputArea from './InputArea.vue'
 import StatusBar from './StatusBar.vue'
 import ThinkingChain from './ThinkingChain.vue'
+import ThemeSwitcher from './ThemeSwitcher.vue'
 
 const chatStore = useChatStore()
 const settingsStore = useSettingsStore()
-const messagesContainerRef = ref<HTMLElement>()
+const messagesRef = ref<HTMLElement>()
+const showSidebar = ref(true)
 
 const emit = defineEmits<{
   minimize: []
@@ -62,25 +85,20 @@ const emit = defineEmits<{
 }>()
 
 onMounted(() => {
-  registerCallbacks()
   scrollToBottom()
 })
 
 watch(() => chatStore.messages, () => {
-  nextTick(() => {
-    scrollToBottom()
-  })
+  nextTick(scrollToBottom)
 }, { deep: true })
 
 watch(() => chatStore.currentThinkingChain, () => {
-  nextTick(() => {
-    scrollToBottom()
-  })
+  nextTick(scrollToBottom)
 }, { deep: true })
 
 function scrollToBottom() {
-  if (messagesContainerRef.value) {
-    messagesContainerRef.value.scrollTop = messagesContainerRef.value.scrollHeight
+  if (messagesRef.value) {
+    messagesRef.value.scrollTop = messagesRef.value.scrollHeight
   }
 }
 </script>
@@ -89,65 +107,178 @@ function scrollToBottom() {
 .chat-window {
   height: 100vh;
   width: 100vw;
-  overflow: hidden;
-}
-
-.chat-container {
-  height: 100%;
-}
-
-.chat-sidebar {
-  height: 100%;
-}
-
-.chat-main {
-  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  background: var(--app-bg);
 }
 
-.chat-header {
-  height: 50px;
-  background: white;
-  border-bottom: 1px solid #e4e7ed;
+/* ---- 标题栏 ---- */
+.title-bar {
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 12px;
+  background: var(--panel-bg);
+  backdrop-filter: var(--backdrop-blur);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  gap: 12px;
 }
 
-.header-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.header-right {
+.title-bar-left {
   display: flex;
+  align-items: center;
   gap: 8px;
+  min-width: 180px;
 }
 
-.chat-messages {
+.app-logo {
+  font-size: 18px;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+}
+
+.app-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.title-bar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.title-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 80px;
+  justify-content: flex-end;
+}
+
+.win-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  transition: all var(--transition-fast);
+}
+.win-btn:hover {
+  background: var(--card-bg-hover);
+  color: var(--text-primary);
+}
+.close-btn:hover {
+  background: var(--error-color);
+  color: white;
+}
+
+/* ---- 主体 ---- */
+.main-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---- 侧栏 ---- */
+.sidebar-pane {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--sidebar-bg);
+  backdrop-filter: var(--backdrop-blur);
+  border-right: 1px solid var(--border-subtle);
+  transition: width var(--transition-normal), opacity var(--transition-normal);
+  overflow: hidden;
+}
+.sidebar-pane.collapsed {
+  width: 0;
+  border-right: none;
+}
+
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  z-index: 10;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+.sidebar-toggle-btn:hover {
+  color: var(--text-primary);
+  background: var(--card-bg-hover);
+}
+
+/* ---- 聊天主区 ---- */
+.chat-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.messages-area {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
-  background: #f5f7fa;
+  padding: 20px 24px;
 }
 
 .messages-list {
-  min-height: 100%;
+  max-width: 780px;
+  margin: 0 auto;
 }
 
-.current-thinking {
-  margin-top: 16px;
-  padding: 12px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+/* ---- 空状态 ---- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--text-tertiary);
+}
+.empty-icon {
+  font-size: 48px;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 0.6;
+}
+.empty-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.empty-hint {
+  font-size: 13px;
 }
 
-.chat-footer {
-  height: auto;
-  padding: 0;
+/* ---- 实时思考 ---- */
+.live-thinking {
+  margin: 12px 0;
+  padding: 12px 16px;
+  background: var(--panel-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 </style>

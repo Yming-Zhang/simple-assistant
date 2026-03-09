@@ -1,10 +1,21 @@
 <template>
   <div class="thinking-chain">
-    <div v-for="(event, idx) in events" :key="idx" class="thinking-item" :class="event.type">
-      <div class="thinking-icon">{{ getEventIcon(event.type) }}</div>
-      <div class="thinking-content">
-        <div class="thinking-label">{{ getEventLabel(event.type) }}</div>
-        <div class="thinking-data">{{ getEventData(event) }}</div>
+    <div
+      v-for="(event, idx) in events"
+      :key="idx"
+      class="step"
+      :class="event.type"
+    >
+      <div class="step-indicator">
+        <span class="step-dot" />
+        <span v-if="idx < events.length - 1" class="step-line" />
+      </div>
+      <div class="step-body">
+        <div class="step-header">
+          <span class="step-icon">{{ getIcon(event.type) }}</span>
+          <span class="step-label">{{ getLabel(event.type) }}</span>
+        </div>
+        <div class="step-detail">{{ getDetail(event) }}</div>
       </div>
     </div>
     <div v-if="events.length === 0" class="thinking-empty">
@@ -16,103 +27,105 @@
 <script setup lang="ts">
 import type { AgentEvent, AgentEventType } from '@/types'
 
-const props = defineProps<{
-  events: AgentEvent[]
-}>()
+defineProps<{ events: AgentEvent[] }>()
 
-function getEventIcon(type: AgentEventType | string): string {
-  const iconMap: Record<string, string> = {
-    thinking: '💭',
-    tool_start: '🔧',
-    tool_result: '✅',
-    reply: '💬',
-    error: '❌'
-  }
-  return iconMap[type] || '📍'
+function getIcon(type: AgentEventType | string): string {
+  const m: Record<string, string> = { thinking: '💭', tool_start: '🔧', tool_result: '✅', reply: '💬', error: '❌' }
+  return m[type] || '📍'
 }
 
-function getEventLabel(type: AgentEventType | string): string {
-  const labelMap: Record<string, string> = {
-    thinking: '思考中',
-    tool_start: '调用工具',
-    tool_result: '工具结果',
-    reply: '回复',
-    error: '错误'
-  }
-  return labelMap[type] || type
+function getLabel(type: AgentEventType | string): string {
+  const m: Record<string, string> = { thinking: '推理', tool_start: '调用工具', tool_result: '工具结果', reply: '回复', error: '错误' }
+  return m[type] || String(type)
 }
 
-function getEventData(event: AgentEvent): string {
-  const data = event.data
-  if (typeof data === 'string') {
-    return data
-  }
-  if (data.reasoning) {
-    return data.reasoning
-  }
-  if (data.result) {
-    return data.result
-  }
-  if (data.error) {
-    return data.error
-  }
-  if (data.name) {
-    return `${data.name}(${JSON.stringify(data.args || {})})`
-  }
-  return JSON.stringify(data)
+function getDetail(event: AgentEvent): string {
+  const d = event.data
+  if (typeof d === 'string') return d
+  if (d.reasoning) return d.reasoning
+  if (d.result) return d.result
+  if (d.error) return d.error
+  if (d.name) return `${d.name}(${JSON.stringify(d.args || {})})`
+  return JSON.stringify(d)
 }
 </script>
 
 <style scoped>
 .thinking-chain {
-  padding: 8px 0;
+  font-size: 12px;
 }
 
-.thinking-item {
+.step {
   display: flex;
   gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid #eee;
+  min-height: 32px;
 }
 
-.thinking-item:last-child {
-  border-bottom: none;
-}
-
-.thinking-icon {
-  font-size: 18px;
+/* 时间线指示器 */
+.step-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 14px;
   flex-shrink: 0;
-  width: 24px;
-  text-align: center;
+  padding-top: 5px;
+}
+.step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  flex-shrink: 0;
+}
+.step.error .step-dot {
+  background: var(--error-color);
+}
+.step-line {
+  flex: 1;
+  width: 1.5px;
+  background: var(--border-color);
+  margin-top: 3px;
 }
 
-.thinking-content {
+/* 内容 */
+.step-body {
   flex: 1;
   min-width: 0;
+  padding-bottom: 10px;
 }
 
-.thinking-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #909399;
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 2px;
 }
 
-.thinking-data {
-  font-size: 13px;
-  color: #303133;
-  word-break: break-word;
-  line-height: 1.5;
+.step-icon {
+  font-size: 12px;
+}
+.step-label {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
-.thinking-item.error .thinking-data {
-  color: #f56c6c;
+.step-detail {
+  color: var(--text-primary);
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.step.error .step-detail {
+  color: var(--error-color);
 }
 
 .thinking-empty {
   text-align: center;
-  color: #909399;
-  font-size: 13px;
-  padding: 16px 0;
+  color: var(--text-tertiary);
+  padding: 12px 0;
 }
 </style>

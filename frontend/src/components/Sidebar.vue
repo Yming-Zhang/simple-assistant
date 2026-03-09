@@ -1,116 +1,137 @@
 <template>
   <div class="sidebar">
-    <el-tabs v-model="activeTab" type="border-card" class="sidebar-tabs">
-      <el-tab-pane label="历史" name="history">
-        <div class="history-header">
-          <el-button size="small" type="primary" @click="handleNewConversation">
-            + 新建会话
-          </el-button>
+    <!-- 顶部：新建对话 + 折叠 -->
+    <div class="sidebar-header">
+      <button class="new-chat-btn" @click="handleNewConversation" title="新建对话">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>新对话</span>
+      </button>
+      <button class="icon-btn" @click="emit('toggle')" title="收起侧栏">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M11 2L5 8l6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+
+    <!-- 会话列表 -->
+    <div class="conversation-list">
+      <div v-if="chatStore.conversationList.length === 0" class="empty-hint">
+        暂无历史会话
+      </div>
+      <div
+        v-for="item in chatStore.conversationList"
+        :key="item.id"
+        class="conv-item"
+        :class="{ active: chatStore.activeConversationId === item.id }"
+        @click="handleSwitch(item.id)"
+      >
+        <div class="conv-title text-ellipsis">{{ item.title || '新对话' }}</div>
+        <div class="conv-meta">
+          <span>{{ item.message_count || 0 }} 条</span>
+          <span>{{ formatDate(item.updated_at) }}</span>
         </div>
-        <div class="history-list">
-          <div v-if="chatStore.conversationList.length === 0" class="empty-hint">
-            暂无历史会话
+        <!-- 操作按钮，hover 显示 -->
+        <div class="conv-actions">
+          <button class="conv-action-btn" @click.stop="handleRename(item)" title="重命名">
+            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M8.5 1.5l2 2L4 10H2v-2l6.5-6.5z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="conv-action-btn delete" @click.stop="handleDelete(item.id)" title="删除">
+            <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 3h8M4.5 3V2h3v1M3 3v7.5a.5.5 0 00.5.5h5a.5.5 0 00.5-.5V3" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部：设置入口 -->
+    <div class="sidebar-footer">
+      <button class="settings-btn" @click="showSettings = !showSettings">
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 10a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M13.7 6.3l-1-.2a4.8 4.8 0 00-.5-1.2l.5-.8a.5.5 0 00-.1-.6l-.7-.7a.5.5 0 00-.6-.1l-.8.5a4.8 4.8 0 00-1.2-.5l-.2-1a.5.5 0 00-.5-.4H7.4a.5.5 0 00-.5.4l-.2 1a4.8 4.8 0 00-1.2.5l-.8-.5a.5.5 0 00-.6.1l-.7.7a.5.5 0 00-.1.6l.5.8a4.8 4.8 0 00-.5 1.2l-1 .2a.5.5 0 00-.4.5v1a.5.5 0 00.4.5l1 .2a4.8 4.8 0 00.5 1.2l-.5.8a.5.5 0 00.1.6l.7.7a.5.5 0 00.6.1l.8-.5a4.8 4.8 0 001.2.5l.2 1a.5.5 0 00.5.4h1a.5.5 0 00.5-.4l.2-1a4.8 4.8 0 001.2-.5l.8.5a.5.5 0 00.6-.1l.7-.7a.5.5 0 00.1-.6l-.5-.8a4.8 4.8 0 00.5-1.2l1-.2a.5.5 0 00.4-.5v-1a.5.5 0 00-.4-.5z" stroke="currentColor" stroke-width="1.3" fill="none"/></svg>
+        <span>设置</span>
+      </button>
+    </div>
+
+    <!-- 设置面板（抽屉） -->
+    <transition name="slide-panel">
+      <div v-if="showSettings" class="settings-panel">
+        <div class="settings-header">
+          <span class="settings-title">设置</span>
+          <button class="icon-btn" @click="showSettings = false">
+            <svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 1L13 13M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+
+        <div class="settings-body">
+          <!-- 主题 -->
+          <div class="setting-group">
+            <label class="setting-label">主题</label>
+            <ThemeSwitcher />
           </div>
-          <div
-            v-for="item in chatStore.conversationList"
-            :key="item.id"
-            class="history-item"
-            :class="{ active: chatStore.activeConversationId === item.id }"
-            @click="handleSwitchConversation(item.id)"
-          >
-            <div class="history-title">{{ item.title || '新对话' }}</div>
-            <div class="history-meta">
-              <span class="history-count">{{ item.message_count || 0 }} 条消息</span>
-              <span class="history-date">{{ formatDate(item.updated_at) }}</span>
-            </div>
-            <div v-if="item.preview" class="history-preview">{{ item.preview }}</div>
-            <div class="history-actions">
-              <el-button
-                size="small"
-                text
-                @click.stop="handleRename(item)"
-              >重命名</el-button>
-              <el-button
-                size="small"
-                text
-                type="danger"
-                @click.stop="handleDelete(item.id)"
-              >删除</el-button>
-            </div>
+
+          <!-- 模型 -->
+          <div class="setting-group">
+            <label class="setting-label">模型</label>
+            <select class="setting-select" v-model="settingsStore.model" @change="onSettingChange">
+              <option value="qwen3.5">Qwen 3.5 4B</option>
+              <option value="qwen2.5-vl">Qwen 2.5 VL</option>
+              <option value="gpt-4">GPT-4</option>
+            </select>
+          </div>
+
+          <!-- 温度 -->
+          <div class="setting-group">
+            <label class="setting-label">温度 <span class="setting-value">{{ settingsStore.temperature.toFixed(1) }}</span></label>
+            <input type="range" class="setting-slider" v-model.number="settingsStore.temperature" min="0" max="1" step="0.1" @change="onSettingChange" />
+          </div>
+
+          <!-- 思考过程 -->
+          <div class="setting-group row">
+            <label class="setting-label">显示思考过程</label>
+            <label class="toggle">
+              <input type="checkbox" v-model="settingsStore.showThinkingChain" @change="onSettingChange" />
+              <span class="toggle-slider" />
+            </label>
+          </div>
+
+          <div class="setting-divider" />
+
+          <!-- 语音回复 -->
+          <div class="setting-group row">
+            <label class="setting-label">语音回复</label>
+            <label class="toggle">
+              <input type="checkbox" v-model="settingsStore.voiceReplyEnabled" @change="onSettingChange" />
+              <span class="toggle-slider" />
+            </label>
+          </div>
+
+          <div class="setting-group row">
+            <label class="setting-label">仅语音唤醒时播报</label>
+            <label class="toggle">
+              <input type="checkbox" v-model="settingsStore.voiceReplyOnlyWhenWakeByVoice" :disabled="!settingsStore.voiceReplyEnabled" @change="onSettingChange" />
+              <span class="toggle-slider" />
+            </label>
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">语音音量 <span class="setting-value">{{ settingsStore.voiceReplyVolume.toFixed(1) }}</span></label>
+            <input type="range" class="setting-slider" v-model.number="settingsStore.voiceReplyVolume" min="0" max="1" step="0.1" :disabled="!settingsStore.voiceReplyEnabled" @change="onSettingChange" />
+          </div>
+
+          <div class="setting-divider" />
+
+          <!-- 高级 -->
+          <div class="setting-group">
+            <label class="setting-label">Whisper 路径</label>
+            <input type="text" class="setting-input" v-model="settingsStore.whisperPath" placeholder="留空使用默认" @blur="onSettingChange" />
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label">默认窗口模式</label>
+            <select class="setting-select" v-model="settingsStore.defaultWindowMode" @change="onSettingChange">
+              <option value="expanded">展开态</option>
+              <option value="floating">悬浮态</option>
+            </select>
           </div>
         </div>
-      </el-tab-pane>
-      
-      <el-tab-pane label="设置" name="settings">
-        <div class="settings-panel">
-          <el-form label-position="top">
-            <el-form-item label="主题">
-              <el-select v-model="settingsStore.theme" style="width: 100%" @change="onThemeChange">
-                <el-option label="蓝色渐变" value="blue-gradient" />
-                <el-option label="粉色渐变" value="pink-gradient" />
-                <el-option label="纯白" value="pure-white" />
-              </el-select>
-            </el-form-item>
-            
-            <el-form-item label="模型">
-              <el-select v-model="settingsStore.model" style="width: 100%" @change="onSettingChange">
-                <el-option label="Qwen 3.5 4B" value="qwen3.5" />
-                <el-option label="Qwen 2.5 VL" value="qwen2.5-vl" />
-                <el-option label="GPT-4" value="gpt-4" />
-              </el-select>
-            </el-form-item>
-            
-            <el-form-item label="温度">
-              <el-slider v-model="settingsStore.temperature" :min="0" :max="1" :step="0.1" @change="onSettingChange" />
-            </el-form-item>
-            
-            <el-form-item label="显示思考过程">
-              <el-switch v-model="settingsStore.showThinkingChain" @change="onSettingChange" />
-            </el-form-item>
-
-            <el-divider>语音设置</el-divider>
-
-            <el-form-item label="语音回复">
-              <el-switch v-model="settingsStore.voiceReplyEnabled" @change="onSettingChange" />
-            </el-form-item>
-            
-            <el-form-item label="仅语音唤醒时播报">
-              <el-switch
-                v-model="settingsStore.voiceReplyOnlyWhenWakeByVoice"
-                :disabled="!settingsStore.voiceReplyEnabled"
-                @change="onSettingChange"
-              />
-            </el-form-item>
-            
-            <el-form-item label="语音音量">
-              <el-slider
-                v-model="settingsStore.voiceReplyVolume"
-                :min="0" :max="1" :step="0.1"
-                :disabled="!settingsStore.voiceReplyEnabled"
-                @change="onSettingChange"
-              />
-            </el-form-item>
-
-            <el-divider>高级</el-divider>
-
-            <el-form-item label="Whisper 路径">
-              <el-input
-                v-model="settingsStore.whisperPath"
-                placeholder="留空使用默认"
-                @blur="onSettingChange"
-              />
-            </el-form-item>
-            
-            <el-form-item label="默认窗口模式">
-              <el-select v-model="settingsStore.defaultWindowMode" style="width: 100%" @change="onSettingChange">
-                <el-option label="展开态" value="expanded" />
-                <el-option label="悬浮态" value="floating" />
-              </el-select>
-            </el-form-item>
-          </el-form>
-        </div>
-      </el-tab-pane>
-    </el-tabs>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -119,30 +140,27 @@ import { ref, onMounted } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { useSettingsStore } from '@/stores/settings'
 import { useChatStore } from '@/stores/chat'
+import ThemeSwitcher from './ThemeSwitcher.vue'
 import type { ConversationSummary } from '@/types'
 
-const activeTab = ref('history')
+const emit = defineEmits<{ toggle: [] }>()
 const settingsStore = useSettingsStore()
 const chatStore = useChatStore()
+const showSettings = ref(false)
 
 onMounted(async () => {
-  // 加载真实设置
   await settingsStore.loadSettings()
-  // 加载真实会话列表
   await chatStore.loadConversationList()
-  // 自动切换到最近的会话（如果还没有激活的会话）
   if (!chatStore.activeConversationId && chatStore.conversationList.length > 0) {
     await chatStore.switchConversation(chatStore.conversationList[0].id)
   }
 })
 
-// ---- 会话操作 ----
-
 async function handleNewConversation() {
   await chatStore.createNewConversation()
 }
 
-async function handleSwitchConversation(convId: string) {
+async function handleSwitch(convId: string) {
   await chatStore.switchConversation(convId)
 }
 
@@ -155,13 +173,9 @@ async function handleRename(item: ConversationSummary) {
     })
     if (value && value.trim()) {
       const ok = await chatStore.renameConversation(item.id, value.trim())
-      if (ok) {
-        ElMessage.success('重命名成功')
-      }
+      if (ok) ElMessage.success('重命名成功')
     }
-  } catch {
-    // 用户取消
-  }
+  } catch { /* cancelled */ }
 }
 
 async function handleDelete(convId: string) {
@@ -172,18 +186,8 @@ async function handleDelete(convId: string) {
       cancelButtonText: '取消'
     })
     const ok = await chatStore.deleteConversation(convId)
-    if (ok) {
-      ElMessage.success('已删除')
-    }
-  } catch {
-    // 用户取消
-  }
-}
-
-// ---- 设置操作 ----
-
-function onThemeChange() {
-  settingsStore.setTheme(settingsStore.theme)
+    if (ok) ElMessage.success('已删除')
+  } catch { /* cancelled */ }
 }
 
 function onSettingChange() {
@@ -197,109 +201,296 @@ function formatDate(dateStr: string): string {
     const now = new Date()
     const diffMs = now.getTime() - d.getTime()
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    if (diffDays === 0) {
-      return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    } else if (diffDays === 1) {
-      return '昨天'
-    } else if (diffDays < 7) {
-      return `${diffDays} 天前`
-    } else {
-      return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-    }
-  } catch {
-    return dateStr
-  }
+    if (diffDays === 0) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    if (diffDays === 1) return '昨天'
+    if (diffDays < 7) return `${diffDays} 天前`
+    return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  } catch { return dateStr }
 }
 </script>
 
 <style scoped>
 .sidebar {
   height: 100%;
-  background: white;
-  border-right: 1px solid #e4e7ed;
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
 
-.sidebar-tabs {
-  height: 100%;
+/* ---- 顶部 ---- */
+.sidebar-header {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.sidebar-tabs :deep(.el-tabs__content) {
-  height: calc(100% - 60px);
+.new-chat-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-gradient);
+  color: var(--text-inverse);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+.new-chat-btn:hover {
+  background: var(--accent-gradient-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.icon-btn:hover {
+  background: var(--card-bg-hover);
+  color: var(--text-primary);
+}
+
+/* ---- 会话列表 ---- */
+.conversation-list {
+  flex: 1;
   overflow-y: auto;
-}
-
-.history-header {
-  padding: 8px;
-  text-align: center;
-}
-
-.history-list {
-  padding: 8px;
+  padding: 0 8px;
 }
 
 .empty-hint {
   text-align: center;
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 13px;
-  padding: 24px 0;
+  padding: 32px 0;
 }
 
-.history-item {
+.conv-item {
+  position: relative;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  margin-bottom: 6px;
-  border: 1px solid transparent;
-  transition: all 0.2s;
-}
-
-.history-item:hover {
-  background: #f5f7fa;
-}
-
-.history-item.active {
-  background: #ecf5ff;
-  border-color: #409eff;
-}
-
-.history-title {
-  font-size: 14px;
-  color: #303133;
-  font-weight: 500;
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.history-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #909399;
   margin-bottom: 2px;
+  transition: all var(--transition-fast);
+}
+.conv-item:hover {
+  background: var(--card-bg-hover);
+}
+.conv-item.active {
+  background: var(--accent-light);
 }
 
-.history-preview {
-  font-size: 12px;
-  color: #a8abb2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 2px;
+.conv-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.conv-item.active .conv-title {
+  color: var(--accent-color);
 }
 
-.history-actions {
-  display: none;
-  margin-top: 4px;
-}
-
-.history-item:hover .history-actions {
+.conv-meta {
   display: flex;
-  gap: 4px;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
+.conv-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: none;
+  gap: 2px;
+}
+.conv-item:hover .conv-actions {
+  display: flex;
+}
+
+.conv-action-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  transition: all var(--transition-fast);
+}
+.conv-action-btn:hover {
+  background: var(--card-bg);
+  color: var(--text-primary);
+}
+.conv-action-btn.delete:hover {
+  color: var(--error-color);
+}
+
+/* ---- 底部 ---- */
+.sidebar-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+  transition: all var(--transition-fast);
+}
+.settings-btn:hover {
+  background: var(--card-bg-hover);
+  color: var(--text-primary);
+}
+
+/* ---- 设置面板 ---- */
 .settings-panel {
-  padding: 16px;
+  position: absolute;
+  inset: 0;
+  background: var(--panel-bg-solid);
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
+}
+
+.settings-header {
+  padding: 12px 12px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.settings-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 16px 16px;
+}
+
+.setting-group {
+  margin-bottom: 16px;
+}
+.setting-group.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setting-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.setting-group.row .setting-label {
+  margin-bottom: 0;
+}
+
+.setting-value {
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+.setting-select,
+.setting-input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--input-bg);
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast);
+}
+.setting-select:focus,
+.setting-input:focus {
+  border-color: var(--accent-color);
+  outline: none;
+}
+
+.setting-slider {
+  width: 100%;
+  accent-color: var(--accent-color);
+  height: 4px;
+}
+
+.setting-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 16px 0;
+}
+
+/* ---- Toggle switch ---- */
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--border-color);
+  border-radius: 20px;
+  transition: background var(--transition-fast);
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  left: 2px;
+  bottom: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: transform var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.toggle input:checked + .toggle-slider {
+  background: var(--accent-color);
+}
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+}
+.toggle input:disabled + .toggle-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- 设置面板动画 ---- */
+.slide-panel-enter-active {
+  animation: slideRight 0.25s ease;
+}
+.slide-panel-leave-active {
+  animation: slideRight 0.2s ease reverse;
+}
+@keyframes slideRight {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
 }
 </style>

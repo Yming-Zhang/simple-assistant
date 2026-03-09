@@ -2,6 +2,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
+import './styles/themes.css'
+import './styles/base.css'
 import App from './App.vue'
 
 const app = createApp(App)
