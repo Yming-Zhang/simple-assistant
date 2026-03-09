@@ -66,7 +66,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat'
-import { useSettingsStore } from '@/stores/settings'
 import Sidebar from './Sidebar.vue'
 import MessageBubble from './MessageBubble.vue'
 import InputArea from './InputArea.vue'
@@ -75,7 +74,6 @@ import ThinkingChain from './ThinkingChain.vue'
 import ThemeSwitcher from './ThemeSwitcher.vue'
 
 const chatStore = useChatStore()
-const settingsStore = useSettingsStore()
 const messagesRef = ref<HTMLElement>()
 const showSidebar = ref(true)
 
@@ -113,18 +111,18 @@ function scrollToBottom() {
   background: var(--app-bg);
 }
 
-/* ---- 标题栏 ---- */
+/* ---- 标题栏（透明，与系统标题栏融合） ---- */
 .title-bar {
   height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  background: var(--panel-bg);
-  backdrop-filter: var(--backdrop-blur);
-  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
   flex-shrink: 0;
   gap: 12px;
+  position: relative;
+  z-index: 10;
 }
 
 .title-bar-left {
@@ -132,6 +130,8 @@ function scrollToBottom() {
   align-items: center;
   gap: 8px;
   min-width: 180px;
+  /* 为 macOS 原生红绿灯按钮留出空间（约 70px） */
+  padding-left: 60px;
 }
 
 .app-logo {

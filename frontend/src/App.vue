@@ -1,5 +1,5 @@
 <template>
-  <div id="app" class="app-shell" :data-theme="settingsStore.theme">
+  <div id="app" class="app-shell" :data-theme="settingsStore.theme" :data-mode="isExpanded ? 'normal' : 'float'">
     <transition name="mode" mode="out-in">
       <FloatingBar v-if="!isExpanded" key="floating" @expand="expandChat" />
       <ChatWindow v-else key="expanded" @minimize="minimizeChat" @close="closeChat" />
@@ -37,12 +37,30 @@ onMounted(() => {
   }
 })
 
-function expandChat() {
+async function expandChat() {
+  try {
+    const pywebview = (window as any).pywebview
+    if (pywebview?.api?.exit_float_mode) {
+      await pywebview.api.exit_float_mode()
+    }
+  } catch (e) {
+    console.warn('exit_float_mode failed:', e)
+  }
   isExpanded.value = true
 }
 
-function minimizeChat() {
+async function minimizeChat() {
   isExpanded.value = false
+  try {
+    const pywebview = (window as any).pywebview
+    if (pywebview?.api?.enter_float_mode) {
+      // 给 Vue 一帧时间渲染 FloatingBar 再缩小窗口
+      await new Promise(r => setTimeout(r, 50))
+      await pywebview.api.enter_float_mode()
+    }
+  } catch (e) {
+    console.warn('enter_float_mode failed:', e)
+  }
 }
 
 function closeChat() {

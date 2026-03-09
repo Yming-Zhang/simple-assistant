@@ -162,6 +162,31 @@ class BridgeAPI:
         except Exception as e:
             return {"valid": False, "message": str(e)}
     
+    # ======== 窗口控制 API ========
+
+    def close_window(self):
+        """关闭窗口"""
+        if self.window:
+            self.window.destroy()
+
+    def enter_float_mode(self):
+        """进入悬浮胶囊模式（macOS 原生）"""
+        try:
+            from ui import macos
+            return macos.enter_float_mode()
+        except Exception as e:
+            print(f"进入悬浮模式失败: {e}")
+            return False
+
+    def exit_float_mode(self):
+        """退出悬浮模式，恢复正常窗口"""
+        try:
+            from ui import macos
+            return macos.exit_float_mode()
+        except Exception as e:
+            print(f"退出悬浮模式失败: {e}")
+            return False
+
     # ======== 录音 API ========
     
     def start_recording(self):

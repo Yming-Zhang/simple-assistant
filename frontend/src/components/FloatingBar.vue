@@ -45,6 +45,7 @@ function toggleMic() {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
 }
 
 .floating-capsule {

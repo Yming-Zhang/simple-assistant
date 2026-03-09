@@ -5,10 +5,12 @@ Simple Assistant 入口文件
 """
 
 import logging
+import time
 import threading
 from assistant import Assistant
 from ui.bridge import BridgeAPI
 from ui.window import create_window
+from ui import macos
 import webview
 
 logging.basicConfig(
@@ -56,8 +58,12 @@ def main():
         print("   - UI：在界面直接输入文字或录音")
         print()
         
-        # 5. 启动 PyWebView
-        webview.start()
+        # 5. 启动 PyWebView（窗口就绪后定制标题栏）
+        def on_started():
+            time.sleep(0.5)  # 等待窗口渲染完毕
+            macos.customize_titlebar()
+        
+        webview.start(func=on_started)
         
     except Exception as e:
         logger.error(f"启动失败: {e}")

@@ -23,6 +23,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "httpx>=0.27",
     "pywebview>=4.0",
+    "pyobjc-framework-Cocoa>=10.0; sys_platform == 'darwin'",
 ]
 
 [project.optional-dependencies]

@@ -210,6 +210,14 @@ input, textarea {
   margin: 1em 0;
 }
 
+/* --- 悬浮胶囊模式：窗口背景全透明 --- */
+[data-mode="float"].app-shell {
+  background: transparent !important;
+}
+[data-mode="float"] .floating-wrapper {
+  background: transparent !important;
+}
+
 /* --- 覆盖 Element Plus 全局样式使之跟随主题 --- */
 .el-button--primary {
   --el-button-bg-color: var(--accent-color) !important;
