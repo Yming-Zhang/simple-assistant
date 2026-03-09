@@ -179,6 +179,14 @@ class BridgeAPI:
             print(f"标题栏定制失败: {e}")
             return False
 
+    def move_window(self, dx, dy):
+        """移动窗口（前端拖拽驱动，dx/dy 为像素偏移）"""
+        try:
+            from ui import macos
+            macos.move_window(dx, dy)
+        except:
+            pass
+
     def enter_float_mode(self):
         """进入悬浮胶囊模式（macOS 原生）"""
         try:

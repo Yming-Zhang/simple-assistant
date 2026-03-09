@@ -1,6 +1,6 @@
 <template>
   <div class="floating-wrapper">
-    <div class="floating-capsule">
+    <div class="floating-capsule" @mousedown="onDragStart">
       <!-- 品牌 / 图标（可点击展开） -->
       <span class="capsule-logo capsule-clickable" @click="emit('expand')">✦</span>
 
@@ -36,6 +36,39 @@ function toggleMic() {
   isRecording.value = !isRecording.value
   isRecording.value ? api.startRecording() : api.stopRecording()
 }
+
+// ---------- 拖拽逻辑（WKWebView 不支持 -webkit-app-region） ----------
+const isDragging = ref(false)
+let startX = 0
+let startY = 0
+
+function onDragStart(e: MouseEvent) {
+  // 只响应胶囊背景区域（按钮/文字有自己的 click 处理）
+  isDragging.value = true
+  startX = e.screenX
+  startY = e.screenY
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup', onDragEnd)
+}
+
+function onDragMove(e: MouseEvent) {
+  if (!isDragging.value) return
+  const dx = e.screenX - startX
+  const dy = e.screenY - startY
+  if (dx === 0 && dy === 0) return
+  startX = e.screenX
+  startY = e.screenY
+  const pywebview = (window as any).pywebview
+  if (pywebview?.api?.move_window) {
+    pywebview.api.move_window(dx, dy)
+  }
+}
+
+function onDragEnd() {
+  isDragging.value = false
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+}
 </script>
 
 <style scoped>
@@ -58,12 +91,13 @@ function toggleMic() {
   border-radius: var(--radius-pill);
   box-shadow: var(--floating-shadow);
   border: 1px solid var(--border-subtle);
-  cursor: default;
+  cursor: grab;
   transition: all var(--transition-normal);
   user-select: none;
   animation: bounceIn 0.4s ease;
-  /* 整个胶囊可拖动 */
-  -webkit-app-region: drag;
+}
+.floating-capsule:active {
+  cursor: grabbing;
 }
 
 .floating-capsule:hover {
@@ -87,7 +121,6 @@ function toggleMic() {
 }
 
 .capsule-clickable {
-  -webkit-app-region: no-drag;
   cursor: pointer;
 }
 
@@ -95,8 +128,6 @@ function toggleMic() {
   display: flex;
   gap: 4px;
   margin-left: 4px;
-  /* 按钮区域不参与拖拽，允许点击 */
-  -webkit-app-region: no-drag;
 }
 
 .capsule-btn {

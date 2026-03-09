@@ -73,6 +73,35 @@ def exit_float_mode():
         return False
 
 
+def move_window(dx, dy):
+    """
+    移动窗口位置（相对偏移）。
+    由前端拖拽事件驱动，dx/dy 是 CSS 像素偏移量。
+    注意：macOS 坐标系 Y 轴向上，所以 dy 要取反。
+    """
+    if not _IS_MACOS:
+        return
+    try:
+        import AppKit
+        from PyObjCTools import AppHelper
+
+        def _apply():
+            _, ns_win, _ = _get_browser_view()
+            if not ns_win:
+                return
+            frame = ns_win.frame()
+            # macOS 坐标系：Y 向上，网页 Y 向下，所以 dy 取反
+            new_origin = AppKit.NSMakePoint(
+                frame.origin.x + dx,
+                frame.origin.y - dy
+            )
+            ns_win.setFrameOrigin_(new_origin)
+
+        AppHelper.callAfter(_apply)
+    except Exception as e:
+        pass  # 拖拽过程中不打印错误，避免刷屏
+
+
 # ============================================================
 # 内部：获取 pywebview cocoa 原生对象
 # ============================================================
