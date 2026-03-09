@@ -169,6 +169,16 @@ class BridgeAPI:
         if self.window:
             self.window.destroy()
 
+    def ensure_titlebar(self):
+        """确保标题栏已透明化（前端 pywebviewready 时调用，作为二次保障）"""
+        try:
+            from ui import macos
+            macos.customize_titlebar()
+            return True
+        except Exception as e:
+            print(f"标题栏定制失败: {e}")
+            return False
+
     def enter_float_mode(self):
         """进入悬浮胶囊模式（macOS 原生）"""
         try:

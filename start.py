@@ -58,12 +58,18 @@ def main():
         print("   - UI：在界面直接输入文字或录音")
         print()
         
-        # 5. 启动 PyWebView（窗口就绪后定制标题栏）
-        def on_started():
-            time.sleep(0.5)  # 等待窗口渲染完毕
+        # 5. 标题栏定制：页面加载完成后执行（确保 NSWindow 稳定）
+        def on_page_loaded():
+            """window.events.loaded 回调 —— 页面 DOM 已加载"""
+            import time
+            time.sleep(0.1)  # 让布局稳定
             macos.customize_titlebar()
-        
-        webview.start(func=on_started)
+            print("[启动] 页面加载完成，标题栏已定制")
+
+        window.events.loaded += on_page_loaded
+
+        # 6. 启动 PyWebView
+        webview.start()
         
     except Exception as e:
         logger.error(f"启动失败: {e}")

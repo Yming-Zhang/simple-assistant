@@ -21,6 +21,11 @@ const settingsStore = useSettingsStore()
 
 function onPyWebViewReady() {
   console.log('pywebviewready fired, loading data...')
+  // 二次保障：确保 macOS 标题栏已透明化
+  const pywebview = (window as any).pywebview
+  if (pywebview?.api?.ensure_titlebar) {
+    pywebview.api.ensure_titlebar()
+  }
   chatStore.loadConversationList().then(() => {
     if (!chatStore.activeConversationId && chatStore.conversationList.length > 0) {
       chatStore.switchConversation(chatStore.conversationList[0].id)
