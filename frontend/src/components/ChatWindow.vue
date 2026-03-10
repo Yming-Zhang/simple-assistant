@@ -1,16 +1,16 @@
 <template>
   <div class="chat-window">
-    <!-- 顶部标题栏（无边框拖拽区） -->
-    <header class="title-bar drag-region">
-      <div class="title-bar-left no-drag">
+    <!-- 顶部标题栏（可拖拽移动窗口） -->
+    <header class="title-bar drag-region" @mousedown="onDragStart">
+      <div class="title-bar-left">
         <span class="app-logo">✦</span>
         <span class="app-title">Simple Assistant</span>
       </div>
-      <div class="title-bar-center no-drag">
+      <div class="title-bar-center">
         <ThemeSwitcher compact />
       </div>
-      <div class="title-bar-right no-drag">
-        <button class="win-btn" title="最小化" @click="emit('minimize')">
+      <div class="title-bar-right">
+        <button class="win-btn no-drag" title="最小化" @click="emit('minimize')">
           <svg width="12" height="12" viewBox="0 0 12 12"><rect y="5" width="12" height="2" rx="1" fill="currentColor"/></svg>
         </button>
       </div>
@@ -79,6 +79,41 @@ const emit = defineEmits<{
   close: []
 }>()
 
+// ---- 拖拽移动窗口 ----
+const isDragging = ref(false)
+let dragStartX = 0
+let dragStartY = 0
+
+function onDragStart(e: MouseEvent) {
+  // 点击按钮、输入框等交互元素不触发拖拽
+  const el = e.target as HTMLElement
+  if (el.closest('button, input, select, a, .no-drag')) return
+  isDragging.value = true
+  dragStartX = e.screenX
+  dragStartY = e.screenY
+  document.addEventListener('mousemove', onDragMove)
+  document.addEventListener('mouseup', onDragEnd)
+}
+
+function onDragMove(e: MouseEvent) {
+  if (!isDragging.value) return
+  const dx = e.screenX - dragStartX
+  const dy = e.screenY - dragStartY
+  if (dx === 0 && dy === 0) return
+  dragStartX = e.screenX
+  dragStartY = e.screenY
+  const pywebview = (window as any).pywebview
+  if (pywebview?.api?.move_window) {
+    pywebview.api.move_window(dx, dy)
+  }
+}
+
+function onDragEnd() {
+  isDragging.value = false
+  document.removeEventListener('mousemove', onDragMove)
+  document.removeEventListener('mouseup', onDragEnd)
+}
+
 onMounted(() => {
   scrollToBottom()
 })
@@ -120,6 +155,11 @@ function scrollToBottom() {
   gap: 12px;
   position: relative;
   z-index: 10;
+  cursor: grab;
+  user-select: none;
+}
+.title-bar:active {
+  cursor: grabbing;
 }
 
 .title-bar-left {
