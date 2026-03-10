@@ -7,6 +7,8 @@ export const useChatStore = defineStore('chat', {
   state: (): ChatState => ({
     messages: [],
     isLoading: false,
+    isRecording: false,
+    wakeupPending: false,
     currentThinkingChain: [],
     activeConversationId: null,
     conversationList: []
@@ -139,6 +141,18 @@ export const useChatStore = defineStore('chat', {
 
     setLoading(loading: boolean) {
       this.isLoading = loading
+    },
+
+    setRecording(recording: boolean) {
+      this.isRecording = recording
+    },
+
+    triggerWakeup() {
+      this.wakeupPending = true
+    },
+
+    clearWakeup() {
+      this.wakeupPending = false
     },
 
     // ---- 思考链 ----

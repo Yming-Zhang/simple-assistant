@@ -75,6 +75,8 @@ export interface ConversationMessage {
 export interface ChatState {
   messages: Message[]
   isLoading: boolean
+  isRecording: boolean
+  wakeupPending: boolean
   currentThinkingChain: AgentEvent[]
   activeConversationId: string | null
   conversationList: ConversationSummary[]

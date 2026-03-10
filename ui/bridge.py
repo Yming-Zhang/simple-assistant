@@ -209,36 +209,103 @@ class BridgeAPI:
     
     def start_recording(self):
         """
-        开始录音（前端调用）
+        开始录音（前端手动调用，需手动调 stop_recording）
         """
-        print("开始录音")
+        print("开始录音（手动模式）")
         self._is_recording = True
-        self._evaluate_js("onAgentStart")
         
         try:
             from audio.microphone import start_recording as mic_start
             mic_start()
         except Exception as e:
             print(f"启动录音失败: {e}")
-            self._evaluate_js("onAgentError", f"启动录音失败: {e}")
-            self._evaluate_js("onAgentComplete")
+            self._evaluate_js("onRecordingStopped")
             self._is_recording = False
+    
+    def start_recording_vad(self):
+        """
+        开始录音 + VAD 静音自停（前端调用）。
+        检测到 2s 连续静音后自动停止录音，执行 STT → LLM 流程，
+        并通过 onRecordingStopped 通知前端。
+        """
+        print("开始录音（VAD 模式）")
+        self._is_recording = True
+        
+        try:
+            from audio.microphone import start_recording_with_vad
+            start_recording_with_vad(on_silence_stop=self._on_vad_silence_stop)
+        except Exception as e:
+            print(f"启动 VAD 录音失败: {e}")
+            self._evaluate_js("onRecordingStopped")
+            self._is_recording = False
+    
+    def _on_vad_silence_stop(self, audio_path):
+        """
+        VAD 静音自停回调：录音已自动停止并保存到 audio_path。
+        通知前端 → STT → LLM 流式处理。
+        """
+        print(f"[VAD] 静音自停，音频文件: {audio_path}")
+        self._is_recording = False
+        
+        # 先通知前端录音已停止
+        self._evaluate_js("onRecordingStopped")
+        
+        if not audio_path:
+            return
+        
+        # 在后台线程执行 STT + LLM 流程
+        def process():
+            try:
+                self._process_audio_file(audio_path)
+            except Exception as e:
+                print(f"VAD 后处理失败: {e}")
+                self._evaluate_js("onAgentError", str(e))
+                self._evaluate_js("onAgentComplete")
+        
+        thread = threading.Thread(target=process, daemon=True)
+        thread.start()
+    
+    def _process_audio_file(self, audio_path):
+        """处理已保存的音频文件：STT → 流式 LLM"""
+        from audio.stt import transcribe
+        
+        self._evaluate_js("onAgentStart")
+        self._evaluate_js("onThinking", "正在识别语音...")
+        
+        text = transcribe(audio_path)
+        if not text:
+            self._evaluate_js("onAgentError", "语音识别失败")
+            self._evaluate_js("onAgentComplete")
+            return
+        
+        print(f"识别到: {text}")
+        self._evaluate_js("onUserMessage", text)
+        self._stream_llm_with_assistant(text, wake_source="voice")
+    
+    def trigger_wakeup(self):
+        """
+        由 assistant.handle_wakeup 调用：通知前端进入悬浮录音态。
+        前端收到 onWakeup 后会切换到 float + 自动开始 VAD 录音。
+        """
+        print("[bridge] 触发唤醒 → 通知前端")
+        self._evaluate_js("onWakeup")
     
     def stop_recording(self):
         """
-        停止录音并处理（前端调用）
+        停止录音并处理（前端手动调用）
         完整流程：停止录音 → STT → 发送给 Agent → 推送到前端
         """
         print("停止录音")
         self._is_recording = False
         
+        # 通知前端录音已停止
+        self._evaluate_js("onRecordingStopped")
+        
         def process():
             try:
                 if self.assistant:
-                    # 有真实 Assistant 的情况
                     self._process_with_assistant()
                 else:
-                    # 没有 Assistant，模拟
                     self._simulate_process()
             except Exception as e:
                 print(f"处理失败: {e}")

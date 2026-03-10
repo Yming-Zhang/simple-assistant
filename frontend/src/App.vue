@@ -39,6 +39,29 @@ watch(isExpanded, (expanded) => {
   document.documentElement.classList.toggle('float-mode', !expanded)
 }, { immediate: true })
 
+// 监听唤醒事件：切换到悬浮态 + 自动开始 VAD 录音
+watch(() => chatStore.wakeupPending, async (pending) => {
+  if (!pending) return
+  chatStore.clearWakeup()
+  
+  // 如果当前是展开态，先切换到悬浮态
+  if (isExpanded.value) {
+    await minimizeChat()
+  }
+  
+  // 等渲染完成，再通知 FloatingBar 开始录音
+  await new Promise(r => setTimeout(r, 100))
+  chatStore.setRecording(true)
+})
+
+// 当录音停止 + agent 完成后，自动展开到聊天窗口
+watch(() => chatStore.isLoading, (loading, prevLoading) => {
+  if (prevLoading && !loading && !isExpanded.value) {
+    // agent 处理完成，从悬浮态自动展开显示结果
+    expandChat()
+  }
+})
+
 onMounted(() => {
   registerCallbacks()
   window.addEventListener('pywebviewready', onPyWebViewReady)

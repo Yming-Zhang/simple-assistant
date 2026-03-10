@@ -37,6 +37,9 @@ def main():
         window = create_window(bridge_api=bridge)
         bridge.set_window(window)
         
+        # 3.5 建立 assistant ↔ bridge 双向引用
+        assistant.set_bridge(bridge)
+        
         # 4. 在单独的线程运行唤醒系统，避免阻塞 PyWebView
         def run_wake_system():
             try:

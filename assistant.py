@@ -125,7 +125,17 @@ class Assistant:
         # 初始化唤醒系统
         self.wake_system = get_wake_system()
         
+        # Bridge 引用（由 start.py 注入，用于 UI 模式下的唤醒流程）
+        self._bridge = None
+        
         logger.info("电脑助手初始化完成！")
+    
+    def set_bridge(self, bridge):
+        """
+        注入 bridge 引用，使唤醒事件能通知 UI。
+        由 start.py 在启动时调用。
+        """
+        self._bridge = bridge
     
 
     
@@ -303,10 +313,23 @@ class Assistant:
     
     def handle_wakeup(self):
         """
-        处理唤醒事件
-        完整流程：唤醒 → 录音 → STT → 匹配 → 执行 → TTS
+        处理唤醒事件。
+        - UI 模式：通知前端进入悬浮录音态（前端接管录音→STT→LLM 流程）
+        - 无头模式：传统 5s 录音 → STT → 匹配 → 执行 → TTS
         """
-        logger.info("开始处理唤醒事件...")
+        logger.info("唤醒事件触发...")
+        
+        # UI 模式：通知前端，由前端+bridge接管后续流程
+        if self._bridge:
+            logger.info("UI 模式：通知前端进入悬浮录音态")
+            try:
+                self._bridge.trigger_wakeup()
+                return
+            except Exception as e:
+                logger.error(f"通知前端失败，回退到无头模式: {e}")
+        
+        # 无头模式（fallback）
+        logger.info("无头模式：开始录音处理...")
         
         try:
             # 1. 提示用户可以开始说话

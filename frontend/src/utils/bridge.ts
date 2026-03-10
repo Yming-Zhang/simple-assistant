@@ -7,6 +7,7 @@ interface PyWebViewWindow extends Window {
     api: {
       send_message: (text: string, images?: string[]) => Promise<void>
       start_recording: () => Promise<void>
+      start_recording_vad: () => Promise<void>
       stop_recording: () => Promise<void>
       // 会话管理
       get_history_list: () => Promise<ConversationSummary[]>
@@ -55,6 +56,14 @@ export const api = {
   stopRecording: async () => {
     if (window.pywebview?.api?.stop_recording) {
       await window.pywebview.api.stop_recording()
+    } else {
+      console.warn('[bridge] pywebview.api not available')
+    }
+  },
+
+  startRecordingVad: async () => {
+    if (window.pywebview?.api?.start_recording_vad) {
+      await window.pywebview.api.start_recording_vad()
     } else {
       console.warn('[bridge] pywebview.api not available')
     }
@@ -215,6 +224,16 @@ export function registerCallbacks() {
       content: text,
       status: 'done'
     })
+  }
+
+  ;(window as any).onWakeup = () => {
+    console.log('onWakeup: 唤醒事件，通知切换到悬浮录音态')
+    chatStore.triggerWakeup()
+  }
+
+  ;(window as any).onRecordingStopped = () => {
+    console.log('onRecordingStopped: 录音已停止')
+    chatStore.setRecording(false)
   }
 
   console.log('Bridge callbacks registered')
