@@ -285,9 +285,17 @@ class BridgeAPI:
     def trigger_wakeup(self):
         """
         由 assistant.handle_wakeup 调用：通知前端进入悬浮录音态。
-        前端收到 onWakeup 后会切换到 float + 自动开始 VAD 录音。
+        先将窗口激活到前台，再通知前端进入浮窗 + 自动录音。
         """
-        print("[bridge] 触发唤醒 → 通知前端")
+        print("[bridge] 触发唤醒 → 激活窗口 → 通知前端")
+        try:
+            from ui import macos
+            macos.show_window()
+        except Exception as e:
+            print(f"[bridge] show_window 失败: {e}")
+        # 给窗口激活一点时间，再发 JS 事件
+        import time
+        time.sleep(0.15)
         self._evaluate_js("onWakeup")
     
     def stop_recording(self):

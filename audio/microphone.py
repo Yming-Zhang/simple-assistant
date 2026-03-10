@@ -194,11 +194,14 @@ class AudioRecorder:
     def _auto_stop(self):
         """VAD 检测到静音超时，自动停止录音并调用回调"""
         self._use_vad = False
+        # 必须在 stop_recording 之前保存回调引用，
+        # 因为 stop_recording 会将 self._vad_callback 置为 None
+        callback = self._vad_callback
         audio_path = self.stop_recording("output.wav")
         
-        if self._vad_callback:
+        if callback:
             try:
-                self._vad_callback(audio_path)
+                callback(audio_path)
             except Exception as e:
                 print(f"[VAD] 回调执行失败: {e}")
 

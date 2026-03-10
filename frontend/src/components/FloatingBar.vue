@@ -23,7 +23,9 @@
 
       <!-- ===================== 文字输入态 ===================== -->
       <template v-else-if="mode === 'typing'">
-        <span class="capsule-logo-mini">✦</span>
+        <button class="capsule-btn close-btn capsule-clickable" @click.stop="exitTyping" title="取消">
+          <svg width="14" height="14" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
         <input
           ref="inputRef"
           class="capsule-input capsule-clickable"
@@ -42,6 +44,9 @@
             <path d="M3.5 8a4.5 4.5 0 009 0" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/>
             <line x1="8" y1="12.5" x2="8" y2="14.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
           </svg>
+        </button>
+        <button class="capsule-btn expand-btn capsule-clickable" @click.stop="emit('expand')" title="展开">
+          <svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
         </button>
       </template>
 
@@ -269,14 +274,13 @@ function onDragEnd() {
 }
 
 /* ---- 文字输入态元素 ---- */
-.capsule-logo-mini {
-  font-size: 16px;
-  background: var(--accent-gradient);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 700;
+.close-btn {
+  color: var(--text-tertiary);
   flex-shrink: 0;
+}
+.close-btn:hover {
+  color: var(--accent-color);
+  background: var(--card-bg-hover);
 }
 .capsule-input {
   flex: 1;

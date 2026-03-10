@@ -73,6 +73,33 @@ def exit_float_mode():
         return False
 
 
+def show_window():
+    """
+    将窗口激活并置于最前方。
+    唤醒时调用：确保即使 app 在后台，窗口也能弹出到前面。
+    """
+    if not _IS_MACOS:
+        return
+    try:
+        import AppKit
+        from PyObjCTools import AppHelper
+
+        def _apply():
+            _, ns_win, _ = _get_browser_view()
+            app = AppKit.NSApplication.sharedApplication()
+            # 激活应用（即使不在前台）
+            app.activateIgnoringOtherApps_(True)
+            if ns_win:
+                # 如果窗口被最小化，先恢复
+                if ns_win.isMiniaturized():
+                    ns_win.deminiaturize_(None)
+                ns_win.makeKeyAndOrderFront_(None)
+
+        AppHelper.callAfter(_apply)
+    except Exception as e:
+        print(f"[macos] show_window 失败: {e}")
+
+
 def move_window(dx, dy):
     """
     移动窗口位置（相对偏移）。
